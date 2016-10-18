@@ -3,10 +3,12 @@ import tensorflow as tf
 from scipy import misc
 import glob
 import json
+
  
 typesDict = dict()
 typeCount=0
 HALFSIZE=7
+sampleCount=0
  
 def extractData(image, x, y):
   shape = image.shape
@@ -22,36 +24,37 @@ def extractData(image, x, y):
   bottom = y + HALFSIZE
   if bottom > shape[0]:
     bottom = shape[0]
-  print shape
-  result = ''
-  for xPos in range(left,right+1):
-    for yPos in range(top, bottom+1):
-      result += unichr(image[y][x][0]) + unichr(image[y][x][1]) +unichr(image[y][x][2])
-  return result
- 
-def manageImage(singleType, image):
-    print(singleType)
+    
+  return  image[top:bottom,left:right].flatten().tostring();
+  
+   
+def manageImage(singleType, image, typeId,writer):
+    global sampleCount
     for point in singleType:
         x = int(singleType[point]['x'])
         y = int(singleType[point]['y'])
-        extractData(image, x, y);
+        imgData = extractData(image, x, y)
+        data = bytes([typeId]) + imgData
+        writer.write(data)
+        sampleCount+=1
         
 def addSingleTypeToDic(singleType):
     if not singleType in typesDict :
         typesDict[singleType] = len(typesDict)+1
+    return typesDict[singleType];
 
-def manageFile(dataFile):
+def manageFile(dataFile, writer):
     imageFileName = dataFile['file']
     types = dataFile['type']
     image = misc.imread(imageFileName)
     for singleType in types:
-        addSingleTypeToDic(singleType)
-        manageImage(types[singleType], image)
-    print(typesDict)
+        typeId = addSingleTypeToDic(singleType)
+        manageImage(types[singleType], image, typeId,writer)
 
 print("start")
 with open("data.txt") as f:
     data = json.load(f);
+    writer = tf.python_io.TFRecordWriter('samples.img')
 for dataFile in data: 
-    manageFile(dataFile)
-        
+    manageFile(dataFile,writer)
+print ('written ' + str(sampleCount) + " samples")
