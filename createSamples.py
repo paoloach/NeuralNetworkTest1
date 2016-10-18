@@ -47,9 +47,10 @@ def manageFile(dataFile, writer):
     imageFileName = dataFile['file']
     types = dataFile['type']
     image = misc.imread(imageFileName)
-    for singleType in types:
-        typeId = addSingleTypeToDic(singleType)
-        manageImage(types[singleType], image, typeId,writer)
+    for listTypes in types:
+        for singleType in listTypes:
+            typeId = addSingleTypeToDic(singleType)
+            manageImage(listTypes[singleType], image, typeId,writer)
 
 print("start")
 with open("data.txt") as f:
