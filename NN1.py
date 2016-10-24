@@ -42,7 +42,7 @@ def _read32(bytestream):
 
 
 def extract_images():
-    with open("samples.img", "br") as reader:
+    with open("samples.img", "rb") as reader:
         global IMAGE_HEIGHT
         global IMAGE_WIDTH
         reader.seek(0, os.SEEK_END)
@@ -50,6 +50,8 @@ def extract_images():
         reader.seek(0, os.SEEK_SET)
         IMAGE_WIDTH = _read32(reader)
         IMAGE_HEIGHT = _read32(reader)
+        print (size)
+        print (IMAGE_WIDTH)
         numImages = (size - 8) / (IMAGE_WIDTH * IMAGE_HEIGHT * 3 + 1)
         label = np.array(np.frombuffer(reader.read(1), dtype=np.uint8), dtype=np.uint8)
         values = np.frombuffer(reader.read(IMAGE_HEIGHT * IMAGE_WIDTH * 3), dtype=np.uint8)
