@@ -283,15 +283,17 @@ def train3():
         labels[i,label[i]]=1
     image_size = IMAGE_WIDTH * IMAGE_HEIGHT * 3
     data_flat = np.array(data).reshape(num_images, image_size)
-    hidden1Neurons = 200
+    hidden1Neurons = 1000
     with tf.Graph().as_default():
         global_step = tf.Variable(0, trainable=False)
         images = tf.placeholder(np.float32, [None, image_size], name="images")
 
         with tf.name_scope('hidden1'):
-            W = tf.Variable(tf.zeros([image_size, hidden1Neurons]))
+            w = tf.Variable(
+                tf.truncated_normal([image_size, hidden1Neurons],
+                                    stddev=1.0 / math.sqrt(float(image_size))))
             b = tf.Variable(tf.zeros([hidden1Neurons]))
-            hidden1 = tf.nn.relu(tf.matmul(images, W) + b)
+            hidden1 = tf.nn.relu(tf.matmul(images, w) + b)
 
         with tf.name_scope('softmax_linear'):
             w = tf.Variable(
@@ -304,6 +306,7 @@ def train3():
 
         y_ = tf.placeholder(tf.float32, [None, NUM_CLASSES])
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
+
         train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
 
         sess = tf.InteractiveSession()
@@ -327,7 +330,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     if tf.gfile.Exists(TRAIN_DIR):
         tf.gfile.DeleteRecursively(TRAIN_DIR)
     tf.gfile.MakeDirs(TRAIN_DIR)
-    train3()
+    train2()
 
 
 if __name__ == '__main__':
