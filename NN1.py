@@ -260,6 +260,7 @@ def train2():
         y = tf.matmul(images, W) + b
 
         y_ = tf.placeholder(tf.float32, [None, NUM_CLASSES])
+
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
         train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
 
@@ -330,6 +331,7 @@ def train3():
         y = tf.matmul(hidden2, w3) + b3
 
         y_ = tf.placeholder(tf.float32, [None, NUM_CLASSES])
+        y__ = tf.placeholder(tf.float32, [int(num_images)])
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
 
         optimizer = tf.train.GradientDescentOptimizer(1)
@@ -337,17 +339,17 @@ def train3():
         train_step = optimizer.minimize(cross_entropy, global_step=global_step,
                                         var_list=[w1,b1,w2,b2,w3,b3])
 
-        eval = evaluation(y,y_)
+        eval = evaluation(y,y__)
         sess = tf.InteractiveSession()
         # Train
         tf.initialize_all_variables().run()
         for step in range(1000):
-            _, cross_entropy_value = sess.run([train_step, cross_entropy], feed_dict={images: data_flat, y_: labels})
+            _, cross_entropy_value = sess.run([train_step, cross_entropy], feed_dict={images: data_flat, y_: labels,y__:label})
             if (step % 10== 0):
                 result = tf.argmax(y, 1)
                 correct_prediction = tf.equal(result, tf.argmax(y_, 1))
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-                accuracy_value = sess.run([eval], feed_dict={images: data_flat, y_: label})
+                accuracy_value = sess.run([eval], feed_dict={images: data_flat, y_: labels,y__:label})
                 print(accuracy_value)
 
 
