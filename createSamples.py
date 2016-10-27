@@ -5,10 +5,11 @@ import struct
 from scipy import misc
 import skimage.color
 from scipy import ndimage
+import matplotlib.pyplot as plt
 
 typesDict = dict()
 typeCount = 0
-HALFSIZE = 7
+HALFSIZE = 9
 sampleCount = 0
 
 
@@ -37,45 +38,55 @@ def extractData(image, x, y, angle):
     if bottom > shape[0]:
         bottom = shape[0]
 
-
     sub = image[top:bottom, left:right]
+    # plt.imshow(sub)
     if angle > 0:
-      sub= ndimage.rotate(sub, angle, reshape=False) 
-
+        sub = ndimage.rotate(sub, angle, reshape=False)
     sub = skimage.color.rgb2hsv(sub)
-    sub = 255*sub
+    sub = 255 * sub
     return sub.flatten()
 
 
-def manageImage(singleType, image, typeId, writer):
+def save_data(image, writer, x, y, angle=0, typeId=0):
     global sampleCount
+    imgData = extractData(image, x, y, angle)
+    d = numpy.array(typeId, dtype=numpy.uint8)
+    d2 = numpy.array(imgData, dtype=numpy.uint8)
+    d3 = numpy.append(d, d2)
+    count = writer.write(d3)
+    print(count)
+    sampleCount += 1
+
+
+def manageImage(singleType, image, typeId, writer, file_name, points):
+    # fig = plt.figure()
+    image_count = 1
     for point in singleType:
+        #        a = fig.add_subplot(3, 3, image_count)
+        image_count += 1
         x = int(singleType[point]['x'])
         y = int(singleType[point]['y'])
-        imgData = extractData(image, x, y, 0)
-        d= numpy.array(typeId,dtype=numpy.uint8)    
-        d2 = numpy.array(imgData,dtype=numpy.uint8)    
-        d3 = numpy.append(d,d2)
-        writer.write(d3)
-        sampleCount += 1
-        imgData = extractData(image, x, y, 90)
-        d= numpy.array(typeId,dtype=numpy.uint8)    
-        d2 = numpy.array(imgData,dtype=numpy.uint8)    
-        d3 = numpy.append(d,d2)
-        writer.write(d3)
-        sampleCount += 1
-        imgData = extractData(image, x, y, 180)
-        d= numpy.array(typeId,dtype=numpy.uint8)    
-        d2 = numpy.array(imgData,dtype=numpy.uint8)    
-        d3 = numpy.append(d,d2)
-        writer.write(d3)
-        sampleCount += 1
-        imgData = extractData(image, x, y, 270)
-        d= numpy.array(typeId,dtype=numpy.uint8)    
-        d2 = numpy.array(imgData,dtype=numpy.uint8)    
-        d3 = numpy.append(d,d2)
-        writer.write(d3)
-        sampleCount += 1        
+        points.append((x, y))
+        title = '{} [{},{}]'.format(file_name, x, y)
+        #        a.set_title(title)
+        save_data(image, writer, x, y, 0, typeId)
+        save_data(image, writer, x, y, 90, typeId)
+        save_data(image, writer, x, y, 180, typeId)
+        save_data(image, writer, x, y, 270, typeId)
+
+
+# plt.show()
+
+
+
+def add_invalid_points(image, points, writer):
+    for x, y in points:
+        for x_dist in range(3, 10, 2):
+            for y_dist in range(3, 10, 2):
+                save_data(image, writer, x + x_dist, y + y_dist,0,0)
+                save_data(image, writer, x + x_dist, y - y_dist,0,0)
+                save_data(image, writer, x - x_dist, y + y_dist,0,0)
+                save_data(image, writer, x - x_dist, y - y_dist,0,0)
 
 
 def addSingleTypeToDic(singleType):
@@ -89,9 +100,11 @@ def manageFile(dataFile, writer):
     types = dataFile['type']
     image = misc.imread(imageFileName)
     for listTypes in types:
+        points = []
         for singleType in listTypes:
             typeId = addSingleTypeToDic(singleType)
-            manageImage(listTypes[singleType], image, typeId, writer)
+            manageImage(listTypes[singleType], image, typeId, writer, imageFileName, points)
+            add_invalid_points(image, points, writer)
 
 
 print("start")
