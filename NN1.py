@@ -275,6 +275,26 @@ def train2():
                 accuracy_value = sess.run([accuracy], feed_dict={images: data_flat, y_: labels})
                 print(accuracy_value)
 
+def evaluation(logits, labels):
+  """Evaluate the quality of the logits at predicting the label.
+
+  Args:
+    logits: Logits tensor, float - [batch_size, NUM_CLASSES].
+    labels: Labels tensor, int32 - [batch_size], with values in the
+      range [0, NUM_CLASSES).
+
+  Returns:
+    A scalar int32 tensor with the number of examples (out of batch_size)
+    that were predicted correctly.
+  """
+  # For a classifier model, we can use the in_top_k Op.
+  # It returns a bool tensor with shape [batch_size] that is true for
+  # the examples where the label is in the top k (here k=1)
+  # of all logits for that example.
+  correct = tf.nn.in_top_k(logits, tf.cast(labels, tf.int32), 1)
+  # Return the number of true entries.
+  return tf.reduce_sum(tf.cast(correct, tf.int32))
+
 def train3():
     global num_images
     data, label, num_images = extract_images()
@@ -283,32 +303,41 @@ def train3():
         labels[i,label[i]]=1
     image_size = IMAGE_WIDTH * IMAGE_HEIGHT * 3
     data_flat = np.array(data).reshape(num_images, image_size)
-    hidden1Neurons = 1000
+    hidden1Neurons = 128
+    hidden2Neurons = 32
     with tf.Graph().as_default():
         global_step = tf.Variable(0, trainable=False)
         images = tf.placeholder(np.float32, [None, image_size], name="images")
 
-        with tf.name_scope('hidden1'):
-            w = tf.Variable(
-                tf.truncated_normal([image_size, hidden1Neurons],
-                                    stddev=1.0 / math.sqrt(float(image_size))))
-            b = tf.Variable(tf.zeros([hidden1Neurons]))
-            hidden1 = tf.nn.relu(tf.matmul(images, w) + b)
+        w1 = tf.Variable(
+            tf.truncated_normal([image_size, hidden1Neurons],
+                                stddev=1.0 / math.sqrt(float(image_size))))
+        b1 = tf.Variable(tf.zeros([hidden1Neurons]))
+        hidden1 = tf.nn.relu(tf.matmul(images, w1) + b1)
 
-        with tf.name_scope('softmax_linear'):
-            w = tf.Variable(
-                tf.truncated_normal([hidden1Neurons, NUM_CLASSES],
-                                    stddev=1.0 / math.sqrt(float(hidden1Neurons))),
-                name='weights')
-            b = tf.Variable(tf.zeros([NUM_CLASSES]),
-                                 name='biases')
-            y = tf.matmul(hidden1, w) + b
+        w2 = tf.Variable(
+            tf.truncated_normal([hidden1Neurons, hidden2Neurons],
+                                stddev=1.0 / math.sqrt(float(hidden1Neurons))))
+        b2 = tf.Variable(tf.zeros([hidden2Neurons]))
+        hidden2 = tf.nn.relu(tf.matmul(hidden1, w2) + b2)
+
+        w3 = tf.Variable(
+            tf.truncated_normal([hidden2Neurons, NUM_CLASSES],
+                                stddev=1.0 / math.sqrt(float(hidden2Neurons))),
+            name='weights')
+        b3 = tf.Variable(tf.zeros([NUM_CLASSES]),
+                             name='biases')
+        y = tf.matmul(hidden2, w3) + b3
 
         y_ = tf.placeholder(tf.float32, [None, NUM_CLASSES])
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
 
-        train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+        optimizer = tf.train.GradientDescentOptimizer(1)
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        train_step = optimizer.minimize(cross_entropy, global_step=global_step,
+                                        var_list=[w1,b1,w2,b2,w3,b3])
 
+        eval = evaluation(y,y_)
         sess = tf.InteractiveSession()
         # Train
         tf.initialize_all_variables().run()
@@ -318,7 +347,7 @@ def train3():
                 result = tf.argmax(y, 1)
                 correct_prediction = tf.equal(result, tf.argmax(y_, 1))
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-                accuracy_value = sess.run([accuracy], feed_dict={images: data_flat, y_: labels})
+                accuracy_value = sess.run([eval], feed_dict={images: data_flat, y_: label})
                 print(accuracy_value)
 
 
@@ -330,7 +359,7 @@ def main(argv=None):  # pylint: disable=unused-argument
     if tf.gfile.Exists(TRAIN_DIR):
         tf.gfile.DeleteRecursively(TRAIN_DIR)
     tf.gfile.MakeDirs(TRAIN_DIR)
-    train2()
+    train3()
 
 
 if __name__ == '__main__':
