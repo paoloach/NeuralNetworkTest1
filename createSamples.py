@@ -2,7 +2,7 @@ import json
 
 import numpy
 import struct
-from scipy import misc
+from scipy import misc, random
 import skimage.color
 from scipy import ndimage
 import matplotlib.pyplot as plt
@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 typesDict = dict()
 typeCount = 0
 HALFSIZE = 9
+INVALID_RANGE = 10
 sampleCount = 0
 
 
@@ -54,7 +55,6 @@ def save_data(image, writer, x, y, angle=0, typeId=0):
     d2 = numpy.array(imgData, dtype=numpy.uint8)
     d3 = numpy.append(d, d2)
     count = writer.write(d3)
-    print(count)
     sampleCount += 1
 
 
@@ -81,12 +81,25 @@ def manageImage(singleType, image, typeId, writer, file_name, points):
 
 def add_invalid_points(image, points, writer):
     for x, y in points:
-        for x_dist in range(3, 10, 2):
-            for y_dist in range(3, 10, 2):
-                save_data(image, writer, x + x_dist, y + y_dist,0,0)
-                save_data(image, writer, x + x_dist, y - y_dist,0,0)
-                save_data(image, writer, x - x_dist, y + y_dist,0,0)
-                save_data(image, writer, x - x_dist, y - y_dist,0,0)
+        for x_dist in range(3, INVALID_RANGE, 2):
+            for y_dist in range(3, INVALID_RANGE, 2):
+                save_data(image, writer, x + x_dist, y + y_dist, 0, 0)
+                save_data(image, writer, x + x_dist, y - y_dist, 0, 0)
+                save_data(image, writer, x - x_dist, y + y_dist, 0, 0)
+                save_data(image, writer, x - x_dist, y - y_dist, 0, 0)
+    for i in range(1, 100):
+        found = True
+        pointX = random.randint(HALFSIZE, image.shape[1] - HALFSIZE)
+        pointY = random.randint(HALFSIZE, image.shape[0] - HALFSIZE)
+        while found:
+            found=False
+            for x, y in points:
+                if pointX >= x - INVALID_RANGE and pointX <= x + INVALID_RANGE and pointY >= y - INVALID_RANGE and pointY <= y + INVALID_RANGE:
+                    found = True
+            if found:
+                pointX = random.randint(HALFSIZE, image.shape[1] - HALFSIZE)
+                pointY = random.randint(HALFSIZE, image.shape[0] - HALFSIZE)
+        save_data(image, writer, x - x_dist, y - y_dist, 0, 0)
 
 
 def addSingleTypeToDic(singleType):
@@ -99,6 +112,7 @@ def manageFile(dataFile, writer):
     imageFileName = dataFile['file']
     types = dataFile['type']
     image = misc.imread(imageFileName)
+
     for listTypes in types:
         points = []
         for singleType in listTypes:
