@@ -5,6 +5,7 @@ from __future__ import print_function
 from datetime import datetime
 import os.path
 import time
+import math
 import tensorflow as tf
 import numpy as np
 from scipy import ndimage
@@ -265,7 +266,50 @@ def train2():
         sess = tf.InteractiveSession()
         # Train
         tf.initialize_all_variables().run()
-        for step in range(2000):
+        for step in range(1000):
+            _, cross_entropy_value = sess.run([train_step, cross_entropy], feed_dict={images: data_flat, y_: labels})
+            if (step % 10== 0):
+                result = tf.argmax(y, 1)
+                correct_prediction = tf.equal(result, tf.argmax(y_, 1))
+                accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+                accuracy_value = sess.run([accuracy], feed_dict={images: data_flat, y_: labels})
+                print(accuracy_value)
+
+def train3():
+    global num_images
+    data, label, num_images = extract_images()
+    labels = np.zeros([num_images, NUM_CLASSES])
+    for i in range(0,int(num_images)):
+        labels[i,label[i]]=1
+    image_size = IMAGE_WIDTH * IMAGE_HEIGHT * 3
+    data_flat = np.array(data).reshape(num_images, image_size)
+    hidden1Neurons = 200
+    with tf.Graph().as_default():
+        global_step = tf.Variable(0, trainable=False)
+        images = tf.placeholder(np.float32, [None, image_size], name="images")
+
+        with tf.name_scope('hidden1'):
+            W = tf.Variable(tf.zeros([image_size, hidden1Neurons]))
+            b = tf.Variable(tf.zeros([hidden1Neurons]))
+            hidden1 = tf.nn.relu(tf.matmul(images, W) + b)
+
+        with tf.name_scope('softmax_linear'):
+            w = tf.Variable(
+                tf.truncated_normal([hidden1Neurons, NUM_CLASSES],
+                                    stddev=1.0 / math.sqrt(float(hidden1Neurons))),
+                name='weights')
+            b = tf.Variable(tf.zeros([NUM_CLASSES]),
+                                 name='biases')
+            y = tf.matmul(hidden1, w) + b
+
+        y_ = tf.placeholder(tf.float32, [None, NUM_CLASSES])
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
+        train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+
+        sess = tf.InteractiveSession()
+        # Train
+        tf.initialize_all_variables().run()
+        for step in range(1000):
             _, cross_entropy_value = sess.run([train_step, cross_entropy], feed_dict={images: data_flat, y_: labels})
             if (step % 10== 0):
                 result = tf.argmax(y, 1)
@@ -278,11 +322,12 @@ def train2():
 
 
 
+
 def main(argv=None):  # pylint: disable=unused-argument
     if tf.gfile.Exists(TRAIN_DIR):
         tf.gfile.DeleteRecursively(TRAIN_DIR)
     tf.gfile.MakeDirs(TRAIN_DIR)
-    train2()
+    train3()
 
 
 if __name__ == '__main__':
