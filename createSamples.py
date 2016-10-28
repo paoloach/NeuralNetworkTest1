@@ -118,7 +118,7 @@ def manageFile(dataFile, writer):
         for singleType in listTypes:
             typeId = addSingleTypeToDic(singleType)
             manageImage(listTypes[singleType], image, typeId, writer, imageFileName, points)
-            add_invalid_points(image, points, writer)
+    #        add_invalid_points(image, points, writer)
 
 
 print("start")

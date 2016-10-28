@@ -34,6 +34,10 @@ tf.app.flags.DEFINE_integer('max_steps', 1000000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
+def evaluation(logits, labels):
+    max=tf.reduce_max(logits,1)
+    correct = tf.nn.in_top_k(max, tf.cast(labels, tf.int32), 1)
+    return tf.reduce_sum(tf.cast(correct, tf.int32))
 
 
 def _read32(bytestream):
@@ -131,8 +135,8 @@ def inference(images):
 def calculate_loss(logits, labels):
     # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits,labels))
 
-    labels = tf.cast(labels, tf.int64)
-    7 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels, name='cross_entropy_per_example')
+   # labels = tf.cast(labels, tf.int64)
+    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits, labels, name='cross_entropy_per_example')
     cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
     tf.add_to_collection('losses', cross_entropy_mean)
 
@@ -198,13 +202,18 @@ def _train(total_loss, global_step):
 def train1():
     global num_images
     data, label, num_images = extract_images()
-
+    labelSparse = np.zeros([num_images, NUM_CLASSES])
+    for i in range(0, int(num_images)):
+        labelSparse[i, label[i]] = 1
     with tf.Graph().as_default():
+
         global_step = tf.Variable(0, trainable=False)
         images = tf.placeholder(np.float32, [num_images, IMAGE_WIDTH, IMAGE_HEIGHT, 3], name="images")
-        labels = tf.placeholder(np.float32, [num_images], name="labels")
+        labels = tf.placeholder(np.float32, [int(num_images), NUM_CLASSES], name="labels")
+        y__ = tf.placeholder(tf.float32, [int(num_images)], name="y__")
         logits = inference(images)
-        loss, cross_entropy = calculate_loss(logits, labels)
+        eval = evaluation(logits, y__)
+        loss, cross_entropy = calculate_loss(logits, y__)
         train_op = _train(loss, global_step)
 
         saver = tf.train.Saver(tf.all_variables())
@@ -227,7 +236,7 @@ def train1():
             start_time = time.time()
 
             _, loss_value, cross_entropy_value, logits_value = sess.run(fetches=[train_op, loss, cross_entropy,logits],
-                                                   feed_dict={images: data, labels: label})
+                                                   feed_dict={images: data, labels: labelSparse, y__: labelSparse})
             duration = time.time() - start_time
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -235,15 +244,14 @@ def train1():
             if step % 10 == 0:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
+                summary_str = sess.run(summary_op, feed_dict={images: data, labels: labelSparse, y__: labelSparse})
+                summary_writer.add_summary(summary_str, step - 40)
+                eval_value = sess.run([eval], feed_dict={images: data, labels: labelSparse, y__: labelSparse})
+                format_str = ('%s: step %d, loss = %.5f, eval = $0.4f (%.1f examples/sec)')
+                print(format_str % (datetime.now(), step, loss_value, eval_value, examples_per_sec))
 
-                if step > 30:
-                    summary_str = sess.run(summary_op, feed_dict={images: data, labels: label})
-                    summary_writer.add_summary(summary_str, step - 40)
-
-                format_str = ('%s: step %d, loss = %.4f (%.1f examples/sec)')
-                print(format_str % (datetime.now(), step, loss_value, examples_per_sec))
-                print (cross_entropy_value[0:30])
-                print (logits_value[0:30])
+               # print (cross_entropy_value[0:30])
+               # print (logits_value[0:30])
 
             # Save the model checkpoint periodically.
             if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
@@ -298,25 +306,6 @@ def train2():
                 print(accuracy_value)
 
 
-def evaluation(logits, labels):
-    """Evaluate the quality of the logits at predicting the label.
-
-    Args:
-      logits: Logits tensor, float - [batch_size, NUM_CLASSES].
-      labels: Labels tensor, int32 - [batch_size], with values in the
-        range [0, NUM_CLASSES).
-
-    Returns:
-      A scalar int32 tensor with the number of examples (out of batch_size)
-      that were predicted correctly.
-    """
-    # For a classifier model, we can use the in_top_k Op.
-    # It returns a bool tensor with shape [batch_size] that is true for
-    # the examples where the label is in the top k (here k=1)
-    # of all logits for that example.
-    correct = tf.nn.in_top_k(logits, tf.cast(labels, tf.int32), 1)
-    # Return the number of true entries.
-    return tf.reduce_sum(tf.cast(correct, tf.int32))
 
 
 def train3():
@@ -355,10 +344,11 @@ def train3():
         y__ = tf.placeholder(tf.float32, [int(num_images)], name="y__")
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, y_))
 
-        optimizer = tf.train.GradientDescentOptimizer(1)
-        global_step = tf.Variable(0, name='global_step', trainable=False)
-        train_step = optimizer.minimize(cross_entropy, global_step=global_step,
-                                        var_list=[w1, b1, w2, b2, w3, b3])
+        loss_op = [w1,b1,w2,b2,w3,b3,y]
+        with tf.control_dependencies(loss_op):
+            optimizer = tf.train.GradientDescentOptimizer(1)
+            global_step = tf.Variable(0, name='global_step', trainable=False)
+            train_step = optimizer.minimize(cross_entropy, global_step=global_step)
         tf.histogram_summary('/activations/w', w1)
         tf.scalar_summary('/sparsity/w', tf.nn.zero_fraction(w1, name="summary_W"))
         tf.histogram_summary('/activations/b', b1)
@@ -380,7 +370,7 @@ def train3():
                 correct_prediction = tf.equal(result, tf.argmax(y_, 1))
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
                 accuracy_value = sess.run([eval], feed_dict={images: data_flat, y_: labels, y__: label})
-                print(accuracy_value)
+                print(cross_entropy_value)
 
 
 def main(argv=None):  # pylint: disable=unused-argument
