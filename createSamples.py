@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 typesDict = dict()
 typeCount = 0
 HALFSIZE = 9
-INVALID_RANGE = 10
+INVALID_RANGE = 4
 sampleCount = 0
 
 
