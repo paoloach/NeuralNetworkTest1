@@ -7,6 +7,8 @@ import os.path
 import time
 import math
 import tensorflow as tf
+import tensorflow.contrib.learn as tf_learn
+import tensorflow.contrib.layers as tf_layer
 import numpy as np
 from scipy import ndimage
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -35,8 +37,8 @@ tf.app.flags.DEFINE_integer('max_steps', 1000000,
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 def evaluation(logits, labels):
-    max=tf.reduce_max(logits,1)
-    correct = tf.nn.in_top_k(max, tf.cast(labels, tf.int32), 1)
+    int_label = tf.cast(labels, tf.int32)
+    correct = tf.nn.in_top_k(logits,int_label, 1)
     return tf.reduce_sum(tf.cast(correct, tf.int32))
 
 
@@ -99,7 +101,7 @@ def inference(images):
                              initial_value=tf.random_normal([5, 5, 3, filter1], stddev=0.04, dtype=tf.float32))
         add_weight_decay(kernel,0)
 
-        conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
+        conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='VALID')
         biases = tf.Variable(name='biases', initial_value=tf.zeros([filter1]), dtype=tf.float32)
         bias = tf.nn.bias_add(conv, biases)
         conv1 = tf.nn.relu(bias, name=scope.name)
@@ -129,7 +131,7 @@ def inference(images):
         tf.histogram_summary('/activations/softmax_linear', softmax_linear)
         tf.scalar_summary('/sparsity/softmax_linear', tf.nn.zero_fraction(softmax_linear))
 
-    return softmax_linear
+    return softmax_linear, conv1
 
 
 def calculate_loss(logits, labels):
@@ -198,6 +200,10 @@ def _train(total_loss, global_step):
 
     #return train_step
 
+def saveImageConv(conv):
+    for imageCount in range(0, conv.shape[0]):
+        for filterCount in range(0, conv.shape[1]):
+
 
 def train1():
     global num_images
@@ -209,11 +215,10 @@ def train1():
 
         global_step = tf.Variable(0, trainable=False)
         images = tf.placeholder(np.float32, [num_images, IMAGE_WIDTH, IMAGE_HEIGHT, 3], name="images")
-        labels = tf.placeholder(np.float32, [int(num_images), NUM_CLASSES], name="labels")
+        labels = tf.placeholder(np.float32, [None, NUM_CLASSES], name="labels")
         y__ = tf.placeholder(tf.float32, [int(num_images)], name="y__")
-        logits = inference(images)
-        eval = evaluation(logits, y__)
-        loss, cross_entropy = calculate_loss(logits, y__)
+        logits, conv = inference(images)
+        loss, cross_entropy = calculate_loss(logits, labels)
         train_op = _train(loss, global_step)
 
         saver = tf.train.Saver(tf.all_variables())
@@ -236,7 +241,7 @@ def train1():
             start_time = time.time()
 
             _, loss_value, cross_entropy_value, logits_value = sess.run(fetches=[train_op, loss, cross_entropy,logits],
-                                                   feed_dict={images: data, labels: labelSparse, y__: labelSparse})
+                                                   feed_dict={images: data, labels: labelSparse,y__: label})
             duration = time.time() - start_time
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -244,14 +249,13 @@ def train1():
             if step % 10 == 0:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
-                summary_str = sess.run(summary_op, feed_dict={images: data, labels: labelSparse, y__: labelSparse})
+                summary_str = sess.run(summary_op, feed_dict={images: data, labels: labelSparse,y__: label})
                 summary_writer.add_summary(summary_str, step - 40)
-                eval_value = sess.run([eval], feed_dict={images: data, labels: labelSparse, y__: labelSparse})
-                format_str = ('%s: step %d, loss = %.5f, eval = $0.4f (%.1f examples/sec)')
-                print(format_str % (datetime.now(), step, loss_value, eval_value, examples_per_sec))
-
-               # print (cross_entropy_value[0:30])
-               # print (logits_value[0:30])
+                format_str = ('%s: step %d, loss = %.5f, (%.1f examples/sec)')
+                print(format_str % (datetime.now(), step, loss_value,examples_per_sec))
+                conv_val= sess.run(conv, feed_dict={images: data, labels: labelSparse, y__: label})
+                conv_val = conv_val.swapaxes( 1,3)
+                saveImageConv(conv_val);
 
             # Save the model checkpoint periodically.
             if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
@@ -371,6 +375,27 @@ def train3():
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
                 accuracy_value = sess.run([eval], feed_dict={images: data_flat, y_: labels, y__: label})
                 print(cross_entropy_value)
+
+
+def train4():
+    global num_images
+    data, label, num_images = extract_images()
+    labels = np.zeros([num_images, 1],dtype=np.int32)
+    for i in range(0, int(num_images)):
+        labels[i] = label[i];
+    image_size = IMAGE_WIDTH * IMAGE_HEIGHT * 3
+    data_flat = np.array(data,dtype=np.uint8).reshape(num_images, image_size)
+    with tf.Graph().as_default():
+        feature_columns = [tf_layer.real_valued_column("", dimension=int(image_size),dtype=tf.uint8)]
+        classifier = tf_learn.DNNClassifier(feature_columns=feature_columns,
+                                                    hidden_units=[100, 200, 100],
+                                                    n_classes=NUM_CLASSES,
+                                                    model_dir=TRAIN_DIR)
+        for i in range(0,100):
+            classifier.fit(x=data_flat, y=labels, steps=100)
+            accuracy_score = classifier.evaluate(x=data_flat, y=labels)["accuracy"]
+            print('Accuracy: {0:f}'.format(accuracy_score))
+            print(classifier.predict(data_flat[0]))
 
 
 def main(argv=None):  # pylint: disable=unused-argument
