@@ -10,7 +10,7 @@ import tensorflow as tf
 import tensorflow.contrib.learn as tf_learn
 import tensorflow.contrib.layers as tf_layer
 import numpy as np
-from scipy import ndimage
+from scipy import ndimage,misc
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
 INPUT_FILE = "samples.img"
@@ -95,7 +95,7 @@ def add_weight_decay(variable, param):
 
 
 def inference(images):
-    filter1 = 30
+    filter1 = 10
     with tf.variable_scope('conv1') as scope:
         kernel = tf.Variable(name='weights',
                              initial_value=tf.random_normal([5, 5, 3, filter1], stddev=0.04, dtype=tf.float32))
@@ -175,7 +175,8 @@ def _train(total_loss, global_step):
     loss_averages_op = _add_loss_summaries(total_loss)
 
     with tf.control_dependencies([loss_averages_op]):
-        opt = tf.train.GradientDescentOptimizer(lr)
+        #opt = tf.train.GradientDescentOptimizer(lr)
+        opt = tf.train.AdadeltaOptimizer(lr)
         grads = opt.compute_gradients(total_loss)
 
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
@@ -200,10 +201,16 @@ def _train(total_loss, global_step):
 
     #return train_step
 
-def saveImageConv(conv):
+def saveImageConv(data,conv):
+    if tf.gfile.Exists("conv"):
+        tf.gfile.DeleteRecursively("conv")
+    tf.gfile.MakeDirs("conv")
+    allConv = np.reshape(conv, (conv.shape[0],conv.shape[1] * conv.shape[2], conv.shape[3]))
     for imageCount in range(0, conv.shape[0]):
-        for filterCount in range(0, conv.shape[1]):
-
+        imagefile = "conv/conv_"+str(imageCount) + ".png"
+        misc.imsave(imagefile,allConv[imageCount])
+        imagefile = "conv/orig_"+str(imageCount)+".png"
+        misc.imsave(imagefile, data[imageCount])
 
 def train1():
     global num_images
@@ -253,9 +260,10 @@ def train1():
                 summary_writer.add_summary(summary_str, step - 40)
                 format_str = ('%s: step %d, loss = %.5f, (%.1f examples/sec)')
                 print(format_str % (datetime.now(), step, loss_value,examples_per_sec))
-                conv_val= sess.run(conv, feed_dict={images: data, labels: labelSparse, y__: label})
-                conv_val = conv_val.swapaxes( 1,3)
-                saveImageConv(conv_val);
+            if step % 200 == 199:
+                conv_val = sess.run(conv, feed_dict={images: data, labels: labelSparse, y__: label})
+                conv_val = conv_val.swapaxes(1, 3)
+                saveImageConv(data, conv_val);
 
             # Save the model checkpoint periodically.
             if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
