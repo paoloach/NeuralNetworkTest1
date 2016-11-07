@@ -43,7 +43,7 @@ def extractData(image, x, y, angle):
     # plt.imshow(sub)
     if angle > 0:
         sub = ndimage.rotate(sub, angle, reshape=False)
-    sub = skimage.color.rgb2hsv(sub)
+   # sub = skimage.color.rgb2hsv(sub)
     sub = 255 * sub
     return sub.flatten()
 
@@ -51,11 +51,18 @@ def extractData(image, x, y, angle):
 def save_data(image, writer, x, y, angle=0, typeId=0):
     global sampleCount
     imgData = extractData(image, x, y, angle)
-    d = numpy.array(typeId, dtype=numpy.uint8)
-    d2 = numpy.array(imgData, dtype=numpy.uint8)
-    d3 = numpy.append(d, d2)
-    count = writer.write(d3)
+    writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8), numpy.array(imgData, dtype=numpy.uint8)))
     sampleCount += 1
+    for index in range (0,10):
+        imgData = extractData(image, x, y, angle)
+        for index in range(0,20):
+            point = random.randint(0, imgData.size)
+            minVal = max(imgData[point]-20, 0)
+            maxVal = min(imgData[point] + 20, 255)
+            imgData[point] = random.randint(minVal,maxVal)
+        writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8),numpy.array(imgData, dtype=numpy.uint8) ))
+        sampleCount += 1
+
 
 
 def manageImage(singleType, image, typeId, writer, file_name, points):
@@ -70,9 +77,9 @@ def manageImage(singleType, image, typeId, writer, file_name, points):
         title = '{} [{},{}]'.format(file_name, x, y)
         #        a.set_title(title)
         save_data(image, writer, x, y, 0, typeId)
-        save_data(image, writer, x, y, 90, typeId)
-        save_data(image, writer, x, y, 180, typeId)
-        save_data(image, writer, x, y, 270, typeId)
+  #      save_data(image, writer, x, y, 90, typeId)
+  #      save_data(image, writer, x, y, 180, typeId)
+  #      save_data(image, writer, x, y, 270, typeId)
 
 
 # plt.show()

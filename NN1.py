@@ -96,9 +96,10 @@ def add_weight_decay(variable, param):
 
 def inference(images):
     filter1 = 10
+    level1 = 300
     with tf.variable_scope('conv1') as scope:
         kernel = tf.Variable(name='weights',
-                             initial_value=tf.random_normal([5, 5, 3, filter1], stddev=0.04, dtype=tf.float32))
+                             initial_value=tf.random_normal([7, 7, 3, filter1], stddev=0.04, dtype=tf.float32))
         add_weight_decay(kernel,0)
 
         conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='VALID')
@@ -114,15 +115,15 @@ def inference(images):
     with tf.variable_scope('local1') as scope:
         reshape = tf.reshape(norm1, [norm1.get_shape()[0].value, -1])
         dim = reshape.get_shape()[1].value
-        weights = tf.Variable(name='weights', initial_value=tf.random_normal([dim, 384], stddev=0.04), dtype=tf.float32)
+        weights = tf.Variable(name='weights', initial_value=tf.random_normal([dim, level1], stddev=0.04), dtype=tf.float32)
         add_weight_decay(weights, 0.04)
-        biases = tf.Variable(name='biases', initial_value=tf.constant(value=0.1, shape=[384], dtype=tf.float32))
+        biases = tf.Variable(name='biases', initial_value=tf.constant(value=0.1, shape=[level1], dtype=tf.float32))
         local1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
         tf.histogram_summary('/activations/local1', local1)
         tf.scalar_summary('/sparsity/local1', tf.nn.zero_fraction(local1))
 
     with tf.variable_scope('softmax_linear') as scope:
-        weights = tf.Variable(name='weights', initial_value=tf.random_normal([384, NUM_CLASSES], stddev=1 / 384.0),
+        weights = tf.Variable(name='weights', initial_value=tf.random_normal([level1, NUM_CLASSES], stddev=1.0 / level1),
                               dtype=tf.float32)
         add_weight_decay(weights, 0.04)
         biases = tf.Variable(name='biases', initial_value=tf.constant(value=0, shape=[NUM_CLASSES], dtype=tf.float32))
@@ -168,7 +169,7 @@ def _train(total_loss, global_step):
     #                                 1000,
     #                                 LEARNING_RATE_DECAY_FACTOR,
     #                                 staircase=True)
-    lr = 2
+    lr = 0.5
 
     train_step = tf.train.GradientDescentOptimizer(0.1).minimize(total_loss)
 
@@ -177,6 +178,7 @@ def _train(total_loss, global_step):
     with tf.control_dependencies([loss_averages_op]):
         #opt = tf.train.GradientDescentOptimizer(lr)
         opt = tf.train.AdadeltaOptimizer(lr)
+        #opt = tf.train.AdagradOptimizer(lr)
         grads = opt.compute_gradients(total_loss)
 
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
@@ -201,16 +203,22 @@ def _train(total_loss, global_step):
 
     #return train_step
 
-def saveImageConv(data,conv):
+def saveImageConv(data,conv, label):
     if tf.gfile.Exists("conv"):
         tf.gfile.DeleteRecursively("conv")
     tf.gfile.MakeDirs("conv")
-    allConv = np.reshape(conv, (conv.shape[0],conv.shape[1] * conv.shape[2], conv.shape[3]))
+    all_conv = np.reshape(conv, (conv.shape[0],conv.shape[1] * conv.shape[2], conv.shape[3]))
+    images=dict()
     for imageCount in range(0, conv.shape[0]):
-        imagefile = "conv/conv_"+str(imageCount) + ".png"
-        misc.imsave(imagefile,allConv[imageCount])
-        imagefile = "conv/orig_"+str(imageCount)+".png"
-        misc.imsave(imagefile, data[imageCount])
+        type = label[imageCount]
+        if type in images:
+            images[type] = np.concatenate((images[type], all_conv[imageCount]),1)
+        else:
+            images[type] = all_conv[imageCount]
+
+    for type in images.keys():
+        imagefile = "conv/conv_type_"+str(type)+".png"
+        misc.imsave(imagefile, images[type])
 
 def train1():
     global num_images
@@ -225,6 +233,7 @@ def train1():
         labels = tf.placeholder(np.float32, [None, NUM_CLASSES], name="labels")
         y__ = tf.placeholder(tf.float32, [int(num_images)], name="y__")
         logits, conv = inference(images)
+        eval = evaluation(logits, y__)
         loss, cross_entropy = calculate_loss(logits, labels)
         train_op = _train(loss, global_step)
 
@@ -253,17 +262,27 @@ def train1():
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-            if step % 10 == 0:
+            if step % 200 == 100:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
-                summary_str = sess.run(summary_op, feed_dict={images: data, labels: labelSparse,y__: label})
+                summary_str,logits_val = sess.run((summary_op,logits), feed_dict={images: data, labels: labelSparse,y__: label})
                 summary_writer.add_summary(summary_str, step - 40)
                 format_str = ('%s: step %d, loss = %.5f, (%.1f examples/sec)')
                 print(format_str % (datetime.now(), step, loss_value,examples_per_sec))
-            if step % 200 == 199:
-                conv_val = sess.run(conv, feed_dict={images: data, labels: labelSparse, y__: label})
-                conv_val = conv_val.swapaxes(1, 3)
-                saveImageConv(data, conv_val);
+                format_str = 'Evaluation: %d'
+                calc = np.argmax(logits_value,1)
+                wrong = np.extract(calc != label, np.arange(0,label.shape[0]))
+                val =num_images-np.count_nonzero(calc == label)
+                print(format_str % (val))
+                if wrong.size < 10:
+                    print(wrong)
+                    for i in wrong:
+                        filename = "conv/image_" + str(i)+".png"
+                        misc.imsave(filename, data[i])
+            # if step % 200 == 0:
+            #     conv_val = sess.run(conv, feed_dict={images: data, labels: labelSparse, y__: label})
+            #     conv_val = conv_val.swapaxes(1, 3)
+            #     saveImageConv(data, conv_val, label);
 
             # Save the model checkpoint periodically.
             if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
