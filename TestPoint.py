@@ -16,13 +16,12 @@ NUM_CLASSES = 12
 FLAGS = tf.app.flags.FLAGS
 
 
-def create_image_set(filename):
-    image = misc.imread(filename)
+def create_image_set(image, row):
+
     images = []
-    for y in range(0, image.shape[0] - IMAGE_HEIGHT):
-        for x in range(0, image.shape[1] - IMAGE_WIDTH):
-            sub = image[y:y + IMAGE_HEIGHT, x:x + IMAGE_WIDTH]
-            images.append(sub)
+    for x in range(0, image.shape[1] - IMAGE_WIDTH):
+       sub = image[row:row+IMAGE_HEIGHT,x:x + IMAGE_WIDTH]
+       images.append(sub)
     return images
 
 
@@ -75,24 +74,28 @@ def inference(images):
 
 
 def search(filename):
-    imagesSet = create_image_set(filename)
-
     with tf.Graph().as_default():
-        images = tf.placeholder(np.float32, [len(imagesSet), IMAGE_WIDTH, IMAGE_HEIGHT, 3], name="images")
+        image = misc.imread(filename)
+        images = tf.placeholder(np.float32, [image.shape[1]-IMAGE_WIDTH, IMAGE_WIDTH, IMAGE_HEIGHT, 3], name="images")
         logits = inference(images)
         reduced = tf.reduce_max(logits, reduction_indices=1)
         label = tf.arg_max(logits, dimension=1)
-        found = tf.greater(reduced, 0.8)
+        found = tf.greater(reduced, 1.4)
 
         saver = tf.train.Saver(tf.all_variables())
         sess = tf.Session()
 
         checkpoint_path = os.path.join(CHECKPOINT_DIR, CHECKPOINT_FILENAME)
         saver.restore(sess, checkpoint_path)
-        reduced_val, label_val, found_val = sess.run(fetches=[reduced, label, found], feed_dict={images: imagesSet})
-        for i in range(0,found_val.shape[0]):
-            if found[i]:
-                print("found label at %d %f"%(i, reduced_val[i]))
+
+
+        for y in range(0, image.shape[0] - IMAGE_HEIGHT):
+            images_set = create_image_set(image, y)
+            reduced_val, label_val, found_val = sess.run(fetches=[reduced, label, found], feed_dict={images: images_set})
+            found_positivi = np.nonzero(found_val);
+            if (len(found_positivi[0]) > 0):
+                for i in np.nditer(found_positivi):
+                    print("(%d,%d) found label %d with strength  %f"%(y,i, label_val[i],reduced_val[i]))
 
 
 # noinspection PyUnusedLocal
