@@ -210,13 +210,14 @@ def train():
         summary_op = tf.merge_all_summaries()
 
         sess = tf.Session()
-        if FLAGS.cont:
-            saver.restore(sess, checkpoint_path)
-            print("Model restored.")
-        else:
+        if FLAGS.START:
             init = tf.initialize_all_variables()
             # Start running operations on the Graph.
             sess.run(init)
+        else:
+            saver.restore(sess, checkpoint_path)
+            print("Model restored.")
+
 
         # Start the queue runners.
         tf.train.start_queue_runners(sess=sess)
@@ -266,8 +267,6 @@ def main(argv=None):  # pylint: disable=unused-argument
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cont', nargs='?', const=True, type=bool,
-                        default=True,
-                        help='If true, uses fake data for unit testing.')
+    parser.add_argument('-S',"--START", help='Start a learning session')
     FLAGS = parser.parse_args()
     tf.app.run()
