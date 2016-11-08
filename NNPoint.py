@@ -1,6 +1,7 @@
 import os.path
 import time
 from datetime import datetime
+import argparse
 
 import numpy as np
 import tensorflow as tf
@@ -23,7 +24,6 @@ INITIAL_LEARNING_RATE = 0.5  # Initial learning rate.
 
 MAX_STEPS = 100000
 
-FLAGS = tf.app.flags.FLAGS
 num_images = 0
 
 
@@ -186,7 +186,7 @@ def _train(total_loss, global_step):
     return train_op
 
 
-def train(argv):
+def train():
     global num_images
     data, label, num_images = extract_images()
     label_sparse = np.zeros([num_images, NUM_CLASSES])
@@ -210,7 +210,7 @@ def train(argv):
         summary_op = tf.merge_all_summaries()
 
         sess = tf.Session()
-        if len(argv) > 1 and argv[1] == '--cont':
+        if FLAGS.cont:
             saver.restore(sess, checkpoint_path)
             print("Model restored.")
         else:
@@ -261,8 +261,13 @@ def main(argv=None):  # pylint: disable=unused-argument
     if tf.gfile.Exists(TRAIN_DIR):
         tf.gfile.DeleteRecursively(TRAIN_DIR)
     tf.gfile.MakeDirs(TRAIN_DIR)
-    train(argv)
+    train()
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cont', nargs='?', const=True, type=bool,
+                        default=True,
+                        help='If true, uses fake data for unit testing.')
+    FLAGS = parser.parse_args()
     tf.app.run()
