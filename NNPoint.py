@@ -234,7 +234,7 @@ def train():
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-            if step % 200 == 100:
+            if step % 200 == 1:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
                 summary_str, logits_val, eval_func_value = sess.run((summary_op, logits, eval_func),
@@ -245,8 +245,10 @@ def train():
                 print(format_str % (datetime.now(), step, loss_value, examples_per_sec))
                 format_str = 'Evaluation: %d (%d)'
                 calc = np.argmax(logits_value, 1)
+                amax = np.amax(logits_value,1)
                 val = num_images - np.count_nonzero(calc == label)
                 print(format_str % (val, eval_func_value))
+                print(logits_value[0])
             # if step % 200 == 0:
             #     conv_val = sess.run(conv, feed_dict={images: data, labels: label_sparse, y__: label})
             #     conv_val = conv_val.swapaxes(1, 3)
