@@ -266,8 +266,6 @@ def main(argv=None):  # pylint: disable=unused-argument
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cont', nargs='?', const=True, type=bool,
-                        default=True,
-                        help='If true, uses fake data for unit testing.')
+    parser.add_argument('-s', '--start', help="to restart the training")
     FLAGS = parser.parse_args()
     tf.app.run()
