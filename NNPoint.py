@@ -66,9 +66,9 @@ def extract_images():
         return data, label, num_images
 
 
-def _activation_summary(x):
-    tf.histogram_summary('/activations', x)
-    tf.scalar_summary('/sparsity', tf.nn.zero_fraction(x))
+#def _activation_summary(x):
+#    tf.histogram_summary('/activations', x)
+#    tf.scalar_summary('/sparsity', tf.nn.zero_fraction(x))
 
 
 def add_weight_decay(variable, param):
@@ -77,19 +77,20 @@ def add_weight_decay(variable, param):
 
 
 def inference(images):
-    filter1 = 10
+    kernel1_size=5
+    filter1_size = 10
     level1 = 300
     with tf.variable_scope('conv1') as scope:
-        kernel = tf.Variable(name='weights',
-                             initial_value=tf.random_normal([7, 7, 3, filter1], stddev=0.04, dtype=tf.float32))
-        add_weight_decay(kernel, 0)
+        kernelWeights = tf.Variable(name='weights',
+                             initial_value=tf.random_normal([kernel1_size, kernel1_size, 3, filter1_size], stddev=0.04, dtype=tf.float32))
+        add_weight_decay(kernelWeights, 0)
 
-        conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='VALID')
-        biases = tf.Variable(name='biases', initial_value=tf.zeros([filter1]), dtype=tf.float32)
+        conv = tf.nn.conv2d(images, kernelWeights, [1, 1, 1, 1], padding='VALID')
+        biases = tf.Variable(name='biases', initial_value=tf.zeros([filter1_size]), dtype=tf.float32)
         bias = tf.nn.bias_add(conv, biases)
         conv1 = tf.nn.relu(bias, name=scope.name)
-        tf.histogram_summary('/activations/conv1', conv1)
-        tf.scalar_summary('/sparsity/conv1', tf.nn.zero_fraction(conv1))
+ #       tf.histogram_summary('/activations/conv1', conv1)
+ #       tf.scalar_summary('/sparsity/conv1', tf.nn.zero_fraction(conv1))
 
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
     norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
@@ -102,8 +103,8 @@ def inference(images):
         add_weight_decay(weights, 0.04)
         biases = tf.Variable(name='biases', initial_value=tf.constant(value=0.1, shape=[level1], dtype=tf.float32))
         local1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
-        tf.histogram_summary('/activations/local1', local1)
-        tf.scalar_summary('/sparsity/local1', tf.nn.zero_fraction(local1))
+  #      tf.histogram_summary('/activations/local1', local1)
+  #      tf.scalar_summary('/sparsity/local1', tf.nn.zero_fraction(local1))
 
     with tf.variable_scope('softmax_linear') as scope:
         weights = tf.Variable(name='weights',
@@ -113,8 +114,8 @@ def inference(images):
         biases = tf.Variable(name='biases', initial_value=tf.constant(value=0, shape=[NUM_CLASSES], dtype=tf.float32))
         mat_mul = tf.matmul(local1, weights)
         softmax_linear = tf.add(mat_mul, biases, name=scope.name)
-        tf.histogram_summary('/activations/softmax_linear', softmax_linear)
-        tf.scalar_summary('/sparsity/softmax_linear', tf.nn.zero_fraction(softmax_linear))
+  #      tf.histogram_summary('/activations/softmax_linear', softmax_linear)
+  #      tf.scalar_summary('/sparsity/softmax_linear', tf.nn.zero_fraction(softmax_linear))
 
     return softmax_linear, conv1
 
@@ -138,11 +139,11 @@ def _add_loss_summaries(total_loss):
 
     # Attach a scalar summary to all individual losses and the total loss; do the
     # same for the averaged version of the losses.
-    for l in losses + [total_loss]:
+ #   for l in losses + [total_loss]:
         # Name each loss as '(raw)' and name the moving average version of the loss
         # as the original loss name.
-        tf.scalar_summary(l.op.name + ' (raw)', l)
-        tf.scalar_summary(l.op.name, loss_averages.average(l))
+  #      tf.scalar_summary(l.op.name + ' (raw)', l)
+  #      tf.scalar_summary(l.op.name, loss_averages.average(l))
 
     return loss_averages_op
 
@@ -168,13 +169,13 @@ def _train(total_loss, global_step):
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
     #
     # # Add histograms for trainable variables.
-    for var in tf.trainable_variables():
-        tf.histogram_summary(var.op.name, var)
+  #  for var in tf.trainable_variables():
+   #     tf.histogram_summary(var.op.name, var)
 
     # Add histograms for gradients.
-    for grad, var in grads:
-        if grad is not None:
-            tf.histogram_summary(var.op.name + '/gradients', grad)
+   # for grad, var in grads:
+    #    if grad is not None:
+     #       tf.histogram_summary(var.op.name + '/gradients', grad)
 
     # Track the moving averages of all trainable variables.
     variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
@@ -207,7 +208,7 @@ def train():
         saver = tf.train.Saver(tf.all_variables())
 
         # Build the summary operation based on the TF collection of Summaries.
-        summary_op = tf.merge_all_summaries()
+      #  summary_op = tf.merge_all_summaries()
 
         sess = tf.Session()
         if FLAGS.START:
@@ -222,7 +223,7 @@ def train():
         # Start the queue runners.
         tf.train.start_queue_runners(sess=sess)
 
-        summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
+       # summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
 
         for step in range(0, MAX_STEPS):
             start_time = time.time()
@@ -237,10 +238,10 @@ def train():
             if step % 200 == 1:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
-                summary_str, logits_val, eval_func_value = sess.run((summary_op, logits, eval_func),
+                logits_val, eval_func_value = sess.run((logits, eval_func),
                                                                     feed_dict={images: data, labels: label_sparse,
                                                                                y__: label})
-                summary_writer.add_summary(summary_str, step - 40)
+        #        summary_writer.add_summary(summary_str, step - 40)
                 format_str = '%s: step %d, loss = %.5f, (%.1f examples/sec)'
                 print(format_str % (datetime.now(), step, loss_value, examples_per_sec))
                 format_str = 'Evaluation: %d (%d)'
@@ -248,8 +249,6 @@ def train():
                 amax = np.amax(logits_value,1)
                 val = num_images - np.count_nonzero(calc == label)
                 print(format_str % (val, eval_func_value))
-                print(logits_value[0])
-                print(amax)
             # if step % 200 == 0:
             #     conv_val = sess.run(conv, feed_dict={images: data, labels: label_sparse, y__: label})
             #     conv_val = conv_val.swapaxes(1, 3)
