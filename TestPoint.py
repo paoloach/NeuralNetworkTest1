@@ -80,7 +80,7 @@ def search(filename):
         logits = inference(images)
         reduced = tf.reduce_max(logits, reduction_indices=1)
         label = tf.arg_max(logits, dimension=1)
-        found = tf.greater(reduced, 1.4)
+        found = tf.greater(reduced, 8)
 
         saver = tf.train.Saver(tf.all_variables())
         sess = tf.Session()

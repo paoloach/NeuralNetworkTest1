@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 typesDict = dict()
 typeCount = 0
 HALFSIZE = 9
-INVALID_RANGE = 4
+INVALID_RANGE = 9
 sampleCount = 0
 
 
@@ -47,6 +47,12 @@ def extractData(image, x, y, angle):
     sub = 255 * sub
     return sub.flatten()
 
+
+def save_data_single(image, writer, x, y, angle=0, typeId=0):
+    global sampleCount
+    imgData = extractData(image, x, y, angle)
+    writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8), numpy.array(imgData, dtype=numpy.uint8)))
+    sampleCount += 1
 
 def save_data(image, writer, x, y, angle=0, typeId=0):
     global sampleCount
@@ -87,14 +93,15 @@ def manageImage(singleType, image, typeId, writer, file_name, points):
 
 
 def add_invalid_points(image, points, writer):
+    print("Generate wrong data")
     for x, y in points:
         for x_dist in range(3, INVALID_RANGE, 2):
-            for y_dist in range(3, INVALID_RANGE, 2):
+            for y_dist in range(2, INVALID_RANGE, 2):
                 save_data(image, writer, x + x_dist, y + y_dist, 0, 0)
                 save_data(image, writer, x + x_dist, y - y_dist, 0, 0)
                 save_data(image, writer, x - x_dist, y + y_dist, 0, 0)
                 save_data(image, writer, x - x_dist, y - y_dist, 0, 0)
-    for i in range(1, 100):
+    for i in range(1, 200):
         found = True
         pointX = random.randint(HALFSIZE, image.shape[1] - HALFSIZE)
         pointY = random.randint(HALFSIZE, image.shape[0] - HALFSIZE)
@@ -103,10 +110,8 @@ def add_invalid_points(image, points, writer):
             for x, y in points:
                 if pointX >= x - INVALID_RANGE and pointX <= x + INVALID_RANGE and pointY >= y - INVALID_RANGE and pointY <= y + INVALID_RANGE:
                     found = True
-            if found:
-                pointX = random.randint(HALFSIZE, image.shape[1] - HALFSIZE)
-                pointY = random.randint(HALFSIZE, image.shape[0] - HALFSIZE)
-        save_data(image, writer, x - x_dist, y - y_dist, 0, 0)
+            if not found:
+                save_data_single(image, writer, pointX, pointY, 0, 0)
 
 
 def addSingleTypeToDic(singleType):
@@ -118,6 +123,7 @@ def addSingleTypeToDic(singleType):
 def manageFile(dataFile, writer):
     imageFileName = dataFile['file']
     types = dataFile['type']
+    print("imageFile: %s"%(imageFileName))
     image = misc.imread(imageFileName)
 
     for listTypes in types:
@@ -125,7 +131,7 @@ def manageFile(dataFile, writer):
         for singleType in listTypes:
             typeId = addSingleTypeToDic(singleType)
             manageImage(listTypes[singleType], image, typeId, writer, imageFileName, points)
-     #       add_invalid_points(image, points, writer)
+    add_invalid_points(image, points, writer)
 
 
 print("start")
