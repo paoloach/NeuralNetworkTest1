@@ -94,10 +94,10 @@
          ]
 },
 {"file": "19-09-2016.jpg",
- "left": 103,
- "top": 103,
- "right": 920,
- "bottom": 535,
+ "left": 96,
+ "top": 101,
+ "right": 931,
+ "bottom": 523,
  "type": [ {
           "circleYellow" :
                  {
@@ -156,10 +156,10 @@
          
 },
 {"file": "12-09-2016.jpg",
- "left": 103,
- "top": 103,
- "right": 920,
- "bottom": 535,
+ "left": 93,
+ "top": 102,
+ "right": 930,
+ "bottom": 521,
  "type": [ {
           "circleYellow" :
                  {
@@ -218,10 +218,10 @@
          
 },
 {"file": "05-09-2016.jpg",
- "left": 103,
- "top": 103,
- "right": 920,
- "bottom": 535,
+ "left": 91,
+ "top": 102,
+ "right": 929,
+ "bottom": 521,
  "type": [ {
           "circleYellow" :
                  {
