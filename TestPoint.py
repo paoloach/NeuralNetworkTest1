@@ -80,7 +80,7 @@ def search(filename):
         logits = inference(images)
         reduced = tf.reduce_max(logits, reduction_indices=1)
         label = tf.arg_max(logits, dimension=1)
-        found = tf.greater(reduced, 8)
+        found = tf.greater(label, 0)
 
         saver = tf.train.Saver(tf.all_variables())
         sess = tf.Session()
@@ -91,11 +91,15 @@ def search(filename):
 
         for y in range(0, image.shape[0] - IMAGE_HEIGHT):
             images_set = create_image_set(image, y)
-            reduced_val, label_val, found_val = sess.run(fetches=[reduced, label, found], feed_dict={images: images_set})
-            found_positivi = np.nonzero(found_val);
+            reduced_val, label_val, found_val,logits_value = sess.run(fetches=[reduced, label, found, logits], feed_dict={images: images_set})
+            found_positivi = np.nonzero(label_val);
             if (len(found_positivi[0]) > 0):
                 for i in np.nditer(found_positivi):
-                    print("(%d,%d) found label %d with strength  %f"%(y,i, label_val[i],reduced_val[i]))
+                    strLogistic = "{"
+                    for li in range(NUM_CLASSES):
+                        strLogistic += str(logits_value[i][li]) + ", "
+                    strLogistic += "}"
+                    print("(%d,%d) found label %d with strengths  %s"%(y,i, label_val[i],strLogistic))
 
 
 # noinspection PyUnusedLocal

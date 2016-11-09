@@ -234,7 +234,7 @@ def train():
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-            if step % 200 == 199:
+            if step % 200 == 1:
                 num_examples_per_step = num_images
                 examples_per_sec = num_examples_per_step / duration
                 summary_str, logits_val, eval_func_value = sess.run((summary_op, logits, eval_func),
