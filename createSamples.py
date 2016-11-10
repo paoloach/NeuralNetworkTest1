@@ -44,14 +44,17 @@ def extract_data(image, x, y):
 def save_data_single(image, x, y, type_id=0):
     global sample_count
     img_data = extract_data(image, x, y)
-    writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+    writer.write(img_data)
+    label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
+
     sample_count += 1
 
 
-def save_data(image, writer, x, y, type_id=0, samples=11):
+def save_data(image, x, y, type_id=0, samples=11):
     global sample_count
     img_data = extract_data(image, x, y)
-    writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+    writer.write(img_data)
+    label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
     sample_count += 1
     for index in range(1, samples):
         img_data = extract_data(image, x, y)
@@ -60,17 +63,18 @@ def save_data(image, writer, x, y, type_id=0, samples=11):
             min_val = max(img_data[point] - 20, 0)
             max_val = min(img_data[point] + 20, 255)
             img_data[point] = random.randint(min_val, max_val)
-        writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+        writer.write(img_data)
+        label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
         sample_count += 1
 
 
-def manage_image(single_type, image, type_id, writer, sammpes=11):
+def manage_image(single_type, image, type_id, sammpes=11):
     image_count = 1
     for point in single_type:
         image_count += 1
         x = int(single_type[point]['x'])
         y = int(single_type[point]['y'])
-        save_data(image, writer, x, y, type_id, sammpes)
+        save_data(image, x, y, type_id, sammpes)
 
 
 def add_invalid_points(image, points, left, top, right, bottom):
@@ -96,7 +100,7 @@ def calc_valid_images(data_file):
     return count
 
 
-def manage_valid_images(data_file, writer, sample_for_point):
+def manage_valid_images(data_file, sample_for_point):
     image_file_name = data_file['file']
     types = data_file['type']
     print("imageFile: %s" % image_file_name)
@@ -105,7 +109,7 @@ def manage_valid_images(data_file, writer, sample_for_point):
     for listTypes in types:
         for singleType in listTypes:
             type_id = add_single_type_to_dic(singleType)
-            manage_image(listTypes[singleType], image, type_id, writer, sample_for_point)
+            manage_image(listTypes[singleType], image, type_id, sample_for_point)
 
 
 def manage_invalid_images(data_file):
@@ -134,16 +138,10 @@ print("start")
 with open("data.txt") as f:
     data = json.load(f)
 with open("samples.img", "wb") as writer:
-    sample_for_point = 11
-    _write32(writer, HALFSIZE * 2)
-    _write32(writer, HALFSIZE * 2)
-    valid_images = 0
-    for dataFile in data:
-        valid_images += calc_valid_images(dataFile)
-    valid_images *= 4
-    _write32(writer, valid_images)
-    for dataFile in data:
-        manage_valid_images(dataFile, writer, sample_for_point)
-    for dataFile in data:
-        manage_invalid_images(dataFile)
+    with open("samples.label","wb") as label_writer:
+        sample_for_point = 11
+        for dataFile in data:
+            manage_valid_images(dataFile, sample_for_point)
+        for dataFile in data:
+            manage_invalid_images(dataFile)
 print('written ' + str(sample_count) + " samples")
