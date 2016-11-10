@@ -1,17 +1,14 @@
 import json
+import struct
 
 import numpy
-import struct
 from scipy import misc, random
-import skimage.color
-from scipy import ndimage
-import matplotlib.pyplot as plt
 
 typesDict = dict()
 typeCount = 0
 HALFSIZE = 9
 INVALID_RANGE = 9
-sampleCount = 0
+sample_count = 0
 
 
 def _read32(bytestream):
@@ -24,7 +21,7 @@ def _write32(bytestream, value):
     bytestream.write(us32bit)
 
 
-def extractData(image, x, y, angle):
+def extract_data(image, x, y):
     shape = image.shape
     left = x - HALFSIZE
     if left < 0:
@@ -40,70 +37,56 @@ def extractData(image, x, y, angle):
         bottom = shape[0]
 
     sub = image[top:bottom, left:right]
-    # plt.imshow(sub)
-    if angle > 0:
-        sub = ndimage.rotate(sub, angle, reshape=False)
-        # sub = skimage.color.rgb2hsv(sub)
-    sub = 255 * sub
+    sub *= 255
     return sub.flatten()
 
 
-def save_data_single(image, writer, x, y, angle=0, typeId=0):
-    global sampleCount
-    imgData = extractData(image, x, y, angle)
-    writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8), numpy.array(imgData, dtype=numpy.uint8)))
-    sampleCount += 1
+def save_data_single(image, x, y, type_id=0):
+    global sample_count
+    img_data = extract_data(image, x, y)
+    writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+    sample_count += 1
 
 
-def save_data(image, writer, x, y, angle=0, typeId=0):
-    global sampleCount
-    imgData = extractData(image, x, y, angle)
-    writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8), numpy.array(imgData, dtype=numpy.uint8)))
-    sampleCount += 1
-    for index in range(0, 10):
-        imgData = extractData(image, x, y, angle)
-        for index in range(0, 20):
-            point = random.randint(0, imgData.size)
-            minVal = max(imgData[point] - 20, 0)
-            maxVal = min(imgData[point] + 20, 255)
-            imgData[point] = random.randint(minVal, maxVal)
-        writer.write(numpy.append(numpy.array(typeId, dtype=numpy.uint8), numpy.array(imgData, dtype=numpy.uint8)))
-        sampleCount += 1
+def save_data(image, writer, x, y, type_id=0, samples=11):
+    global sample_count
+    img_data = extract_data(image, x, y)
+    writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+    sample_count += 1
+    for index in range(1, samples):
+        img_data = extract_data(image, x, y)
+        for index_point in range(0, 20):
+            point = random.randint(0, img_data.size)
+            min_val = max(img_data[point] - 20, 0)
+            max_val = min(img_data[point] + 20, 255)
+            img_data[point] = random.randint(min_val, max_val)
+        writer.write(numpy.append(numpy.array(type_id, dtype=numpy.uint8), numpy.array(img_data, dtype=numpy.uint8)))
+        sample_count += 1
 
 
-def manageImage(singleType, image, typeId, writer, file_name, points):
-    # fig = plt.figure()
+def manage_image(single_type, image, type_id, writer, sammpes=11):
     image_count = 1
-    for point in singleType:
-        #        a = fig.add_subplot(3, 3, image_count)
+    for point in single_type:
         image_count += 1
-        x = int(singleType[point]['x'])
-        y = int(singleType[point]['y'])
-        points.append((x, y))
-        title = '{} [{},{}]'.format(file_name, x, y)
-        #        a.set_title(title)
-        save_data(image, writer, x, y, 0, typeId)
-        #      save_data(image, writer, x, y, 90, typeId)
-        #      save_data(image, writer, x, y, 180, typeId)
-        #      save_data(image, writer, x, y, 270, typeId)
+        x = int(single_type[point]['x'])
+        y = int(single_type[point]['y'])
+        save_data(image, writer, x, y, type_id, sammpes)
 
 
-# plt.show()
-
-
-
-def add_invalid_points(image, points, left, top, right, bottom, writer):
+def add_invalid_points(image, points, left, top, right, bottom):
+    global sample_count
     print("Generate wrong data")
-    for x in range (top, bottom, 2):
+    for x in range(top, bottom, 2):
         for y in range(left, right, 2):
-            if not (x,y) in points:
-                save_data_single(image, writer, x, y, 0, 0)
+            if not (x, y) in points:
+                save_data_single(image, x, y, 0)
+                sample_count += 1
 
 
-def addSingleTypeToDic(singleType):
-    if not singleType in typesDict:
-        typesDict[singleType] = len(typesDict) + 1
-    return typesDict[singleType];
+def add_single_type_to_dic(single_type):
+    if single_type not in typesDict:
+        typesDict[single_type] = len(typesDict) + 1
+    return typesDict[single_type]
 
 
 def calc_valid_images(data_file):
@@ -114,57 +97,54 @@ def calc_valid_images(data_file):
     return count
 
 
-def manage_valid_images(dataFile, writer):
-    imageFileName = dataFile['file']
-    left = dataFile['left']
-    top = dataFile['top']
-    right = dataFile['right']
-    bottom = dataFile['bottom']
-    types = dataFile['type']
-    print("imageFile: %s" % (imageFileName))
-    image = misc.imread(imageFileName)
+def manage_valid_images(data_file, writer, sample_for_point):
+    image_file_name = data_file['file']
+    types = data_file['type']
+    print("imageFile: %s" % image_file_name)
+    image = misc.imread(image_file_name)
 
     for listTypes in types:
-        points = []
         for singleType in listTypes:
-            typeId = addSingleTypeToDic(singleType)
-            manageImage(listTypes[singleType], image, typeId, writer, imageFileName, points)
+            type_id = add_single_type_to_dic(singleType)
+            manage_image(listTypes[singleType], image, type_id, writer, sample_for_point)
 
 
-def manage_invalid_images(dataFile, writer):
-    imageFileName = dataFile['file']
-    left = dataFile['left']
-    top = dataFile['top']
-    right = dataFile['right']
-    bottom = dataFile['bottom']
-    types = dataFile['type']
-    print("imageFile: %s" % (imageFileName))
-    image = misc.imread(imageFileName)
+def manage_invalid_images(data_file):
+    image_file_name = data_file['file']
+    left = data_file['left']
+    top = data_file['top']
+    right = data_file['right']
+    bottom = data_file['bottom']
+    types = data_file['type']
+    print("imageFile: %s" % image_file_name)
+    image = misc.imread(image_file_name)
 
     points = []
     for listTypes in types:
         for singleType in listTypes:
-            for point in singleType:
-                x = int(singleType[point]['x'])
-                y = int(singleType[point]['y'])
+            list_point = listTypes[singleType]
+            for point in list_point:
+                x = int(list_point[point]['x'])
+                y = int(list_point[point]['y'])
                 points.append((x, y))
-    add_invalid_points(image, points, left, top, right, bottom, writer)
+    add_invalid_points(image, points, left, top, right, bottom)
 
 
 print("start")
 
 with open("data.txt") as f:
-    data = json.load(f);
+    data = json.load(f)
 with open("samples.img", "wb") as writer:
-    _write32(writer, HALFSIZE * 2);
-    _write32(writer, HALFSIZE * 2);
+    sample_for_point = 11
+    _write32(writer, HALFSIZE * 2)
+    _write32(writer, HALFSIZE * 2)
     valid_images = 0
     for dataFile in data:
         valid_images += calc_valid_images(dataFile)
     valid_images *= 4
     _write32(writer, valid_images)
     for dataFile in data:
-        manage_valid_images(dataFile, writer)
+        manage_valid_images(dataFile, writer, sample_for_point)
     for dataFile in data:
-        manage_invalid_images(dataFile, writer)
-print('written ' + str(sampleCount) + " samples")
+        manage_invalid_images(dataFile)
+print('written ' + str(sample_count) + " samples")
