@@ -12,6 +12,7 @@ TRAIN_DIR = "./tensordboard_data"
 CHECKPOINT_DIR = "./PointData"
 IMAGE_WIDTH = 18
 IMAGE_HEIGHT = 18
+VALID_IMAGES=0
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * 3
 NUM_CLASSES = 12
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 1
@@ -42,30 +43,33 @@ def extract_images():
     with open("samples.img", "rb") as reader:
         global IMAGE_HEIGHT
         global IMAGE_WIDTH
+        global VALID_IMAGES
         global num_images
         reader.seek(0, os.SEEK_END)
         size = reader.tell()
         reader.seek(0, os.SEEK_SET)
         IMAGE_WIDTH = _read32(reader)
         IMAGE_HEIGHT = _read32(reader)
+        VALID_IMAGES = _read32(reader)
         print(size)
         print(IMAGE_WIDTH)
-        num_images = int((size - 8) / (IMAGE_WIDTH * IMAGE_HEIGHT * 3 + 1))
-        label = np.array(np.frombuffer(reader.read(1), dtype=np.uint8), dtype=np.uint8)
-        values = np.frombuffer(reader.read(IMAGE_HEIGHT * IMAGE_WIDTH * 3), dtype=np.uint8)
-        values = values.reshape(IMAGE_WIDTH, IMAGE_HEIGHT, 3)
-        values = np.asarray(values, np.float32)
-        data = [values]
-        for i in range(1, int(num_images)):
-            label = np.append(label, [np.frombuffer(reader.read(1), dtype=np.uint8)])
+        num_images = int((size - 12) / (IMAGE_WIDTH * IMAGE_HEIGHT * 3 + 1))
+        data_valid = []
+        label_valid= []
+        data_wrong = []
+        for i in range(0, int(num_images)):
+            label = np.frombuffer(reader.read(1), dtype=np.uint8)
             values = np.frombuffer(reader.read(IMAGE_HEIGHT * IMAGE_WIDTH * 3), dtype=np.uint8)
             values = values.reshape(IMAGE_WIDTH, IMAGE_HEIGHT, 3)
-            values = np.asarray(values, np.float32)
-            data.append(values)
+            if label[0] > 0:
+                label_valid = np.append(label_valid, label)
+                data_valid.append(values)
+            else:
+                data_wrong.append(values)
 
-        return data, label, num_images
+        return data_valid, label_valid, data_wrong
 
-
+label[0]
 #def _activation_summary(x):
 #    tf.histogram_summary('/activations', x)
 #    tf.scalar_summary('/sparsity', tf.nn.zero_fraction(x))

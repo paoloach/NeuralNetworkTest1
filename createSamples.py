@@ -80,7 +80,6 @@ def add_invalid_points(image, points, left, top, right, bottom):
         for y in range(left, right, 2):
             if not (x, y) in points:
                 save_data_single(image, x, y, 0)
-                sample_count += 1
 
 
 def add_single_type_to_dic(single_type):
