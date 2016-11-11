@@ -14,7 +14,7 @@ IMAGE_WIDTH = 18
 IMAGE_HEIGHT = 18
 VALID_IMAGES = 0
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * 3
-NUM_CLASSES = 12
+NUM_CLASSES = 1
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 1
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
 
@@ -27,6 +27,39 @@ MAX_STEPS = 100000
 
 num_images = 0
 
+
+class BachData:
+    def __init__(self, data, all_label, label_valid, valid_bach_size=200, wrong_bach_size=200):
+        self.num_classes = 1
+        for index_label in label_valid:
+            if all_label[index_label] >= self.num_classes:
+                self.num_classes = all_label[index_label] + 1
+        self.valid_bach_size=valid_bach_size
+        self.wrong_bach_size=wrong_bach_size
+        self.data = data
+        self.all_label = all_label
+        self.label_valid = label_valid
+        self.valid_index = 0
+        self.wrong_index = 0
+
+    def get_num_classes(self):
+        return self.num_classes
+
+    def get_bach_data(self):
+        data = []
+        labels= []
+        upper = self.valid_index+self.valid_bach_size
+        remain = 0
+        if upper > self.label_valid.shape[0]:
+            remain = upper-self.label_valid.shape[0]
+            upper = self.label_valid.shape[0]
+        for index_label in self.label_valid[self.valid_index:upper]:
+            data = np.append(data, self.data[index_label])
+            sparse_label = np.zeros( [self.num_classes])
+            sparse_label[self.all_label[index_label]]=1
+            labels = np.append(labels, sparse_label)
+
+        return (data,labels)
 
 def evaluation(logits, labels):
     int_label = tf.cast(labels, tf.int32)
@@ -45,26 +78,27 @@ def extract_images():
             global IMAGE_HEIGHT
             global IMAGE_WIDTH
             global VALID_IMAGES
+            global NUM_CLASSES
             global num_images
             reader.seek(0, os.SEEK_END)
             size = reader.tell()
             reader.seek(0, os.SEEK_SET)
             print(size)
-            num_images = size / (IMAGE_WIDTH * IMAGE_HEIGHT * 3)
+            num_images = int(size / (IMAGE_WIDTH * IMAGE_HEIGHT * 3))
             data = np.frombuffer(reader.read(size), dtype=np.uint8)
             data = np.reshape(data, (num_images, IMAGE_WIDTH, IMAGE_HEIGHT, 3))
             label = np.frombuffer(label_reader.read(num_images), dtype=np.uint8)
-            data_valid = []
             label_valid = []
-            data_wrong = []
             for i in range(0, int(num_images)):
                 if label[i] > 0:
-                    label_valid = np.append(label_valid, label[i])
-                    data_valid.append(data[i])
-                else:
-                    data_wrong.append(data[i])
+                    if label[i] > NUM_CLASSES:
+                        NUM_CLASSES = label[i]
+                    label_valid = np.append(label_valid, i)
+            NUM_CLASSES += 1
 
-    return data_valid, label_valid, data_wrong
+    bachData = BachData(data,label, label_valid)
+
+    return data, label, label_valid,bachData.get_bach_data()
 
 
 # def _activation_summary(x):
@@ -191,10 +225,10 @@ def _train(total_loss, global_step):
 
 def train():
     global num_images
-    data, label, wrong_images = extract_images()
-    label_sparse = np.zeros([num_images, NUM_CLASSES])
-    for i in range(0, num_images):
-        label_sparse[i, label[i]] = 1
+    data, label, label_valid = extract_images()
+    label_sparse = np.zeros([label_valid.shape[0] + 1, NUM_CLASSES])
+    for i in range(0, label_valid.shape[0]):
+        label_sparse[i, label[label_valid[i]]] = 1
     checkpoint_path = os.path.join(CHECKPOINT_DIR, CHECKPOINT_FILENAME)
     with tf.Graph().as_default():
 

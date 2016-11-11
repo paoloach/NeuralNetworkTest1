@@ -26,13 +26,13 @@ def extract_data(image, x, y):
     left = x - HALFSIZE
     if left < 0:
         left = 0
-    right = x + HALFSIZE
+    right = left + 2*HALFSIZE
     if right > shape[1]:
         right = shape[1]
     top = y - HALFSIZE
     if top < 0:
         top = 0
-    bottom = y + HALFSIZE
+    bottom = top + 2*HALFSIZE
     if bottom > shape[0]:
         bottom = shape[0]
 
@@ -44,6 +44,8 @@ def extract_data(image, x, y):
 def save_data_single(image, x, y, type_id=0):
     global sample_count
     img_data = extract_data(image, x, y)
+    if len(img_data) < 4*HALFSIZE*3:
+        print("ERRORE")
     writer.write(img_data)
     label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
 
@@ -80,8 +82,8 @@ def manage_image(single_type, image, type_id, sammpes=11):
 def add_invalid_points(image, points, left, top, right, bottom):
     global sample_count
     print("Generate wrong data")
-    for x in range(top, bottom, 2):
-        for y in range(left, right, 2):
+    for y in range(top, bottom, 2):
+        for x in range(left, right, 2):
             if not (x, y) in points:
                 save_data_single(image, x, y, 0)
 
