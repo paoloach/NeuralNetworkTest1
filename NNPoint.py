@@ -29,18 +29,13 @@ num_images = 0
 
 
 class BachData:
-    def __init__(self, data, all_label, label_valid, valid_bach_size=200, wrong_bach_size=200):
-        self.num_classes = 1
-        for index_label in label_valid:
-            if all_label[index_label] >= self.num_classes:
-                self.num_classes = all_label[index_label] + 1
-        self.valid_bach_size=valid_bach_size
-        self.wrong_bach_size=wrong_bach_size
+    def __init__(self, data, all_label, label_index, num_classes,bach_size=200):
+        self.num_classes = num_classes
+        self.bach_size=bach_size
         self.data = data
         self.all_label = all_label
-        self.label_valid = label_valid
-        self.valid_index = 0
-        self.wrong_index = 0
+        self.label_index = label_index
+        self.currentIndex = 0
 
     def get_num_classes(self):
         return self.num_classes
@@ -48,18 +43,34 @@ class BachData:
     def get_bach_data(self):
         data = []
         labels= []
-        upper = self.valid_index+self.valid_bach_size
+        upper = self.currentIndex + self.bach_size
         remain = 0
-        if upper > self.label_valid.shape[0]:
-            remain = upper-self.label_valid.shape[0]
-            upper = self.label_valid.shape[0]
-        for index_label in self.label_valid[self.valid_index:upper]:
-            data = np.append(data, self.data[index_label])
-            sparse_label = np.zeros( [self.num_classes])
-            sparse_label[self.all_label[index_label]]=1
-            labels = np.append(labels, sparse_label)
+        if upper > self.label_index.shape[0]:
+            remain = upper-self.label_index.shape[0]
+            upper = self.label_index.shape[0]
 
-        return (data,labels)
+        for index in self.label_index[self.currentIndex:upper]:
+            sparse_label = np.zeros( [self.num_classes])
+            sparse_label[self.all_label[index]]=1
+            if len(data)==0:
+                data = np.array([self.data[index]])
+                labels = np.array([sparse_label])
+            else:
+                data = np.append(data, [self.data[index]], 0)
+                labels = np.append(labels, [sparse_label],0)
+        self.currentIndex = upper
+        if remain > 0:
+            for index in self.currentIndex[0:remain]:
+                sparse_label = np.zeros([self.num_classes])
+                sparse_label[self.all_label[index]] = 1
+                if len(data) == 0:
+                    data = np.array([self.data[index]])
+                    labels = np.array([sparse_label])
+                else:
+                    data = np.append(data, [self.data[index]], 0)
+                    labels = np.append(labels, [sparse_label], 0)
+            self.currentIndex=remain
+        return data,labels
 
 def evaluation(logits, labels):
     int_label = tf.cast(labels, tf.int32)
@@ -89,17 +100,20 @@ def extract_images():
             data = np.reshape(data, (num_images, IMAGE_WIDTH, IMAGE_HEIGHT, 3))
             label = np.frombuffer(label_reader.read(num_images), dtype=np.uint8)
             label_valid = []
+            label_wrong = []
             for i in range(0, int(num_images)):
                 if label[i] > 0:
                     if label[i] > NUM_CLASSES:
                         NUM_CLASSES = label[i]
                     label_valid = np.append(label_valid, i)
+                else:
+                    label_wrong = np.append(label_wrong, i)
             NUM_CLASSES += 1
 
-    bachData = BachData(data,label, label_valid)
+    bachData = BachData(data,label, label_valid,NUM_CLASSES)
+    bachWrongData = BachData(data, label, label_wrong,NUM_CLASSES)
 
-    return data, label, label_valid,bachData.get_bach_data()
-
+    return bachData, bachWrongData
 
 # def _activation_summary(x):
 #    tf.histogram_summary('/activations', x)
