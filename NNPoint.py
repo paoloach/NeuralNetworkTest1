@@ -64,7 +64,7 @@ def extract_images():
                         NUM_CLASSES = label[i]
                     label_valid = np.append(label_valid, i)
                 else:
-                    label_wrong = np.zeros(num_images - i)
+                    label_wrong = np.arange(i,num_images)
                     break
             NUM_CLASSES += 1
 
@@ -254,6 +254,10 @@ def train():
                 #        summary_writer.add_summary(summary_str, step - 40)
                 format_str = '%s: step %d, loss = %.5f, eval= %d, (%.1f examples/sec)'
                 print(format_str % (datetime.now(), step, loss_value, eval_func_value,examples_per_sec))
+                format_str = 'Evaluation: %d (%d)'
+                calc = np.argmax(logits_val, 1)
+                val = logits_val.shape[0] - np.count_nonzero(calc == labels)
+                print(format_str % (val, eval_func_value))
 
 
             # Save the model checkpoint periodically.

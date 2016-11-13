@@ -17,7 +17,7 @@ def _read32(bytestream):
 
 
 def _write32(bytestream, value):
-    us32bit = struct.pack\("I", value)
+    us32bit = struct.pack("I", value)
     bytestream.write(us32bit)
 
 
@@ -48,6 +48,7 @@ def save_data_single(image, x, y, type_id=0):
         print("ERRORE")
     writer.write(img_data)
     label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
+    misc.imsave("tmp/img_"+ str(x)+"-"+str(y)+".img")
 
     sample_count += 1
 
