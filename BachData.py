@@ -4,6 +4,7 @@ from scipy import misc
 
 class BachData:
     def __init__(self, data, all_label, label_index, num_classes, bach_size=200):
+        print ("%d elements"%len(label_index))
         self.num_classes = int(num_classes)
         self.bach_size = bach_size
         self.data = data

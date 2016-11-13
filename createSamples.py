@@ -10,7 +10,6 @@ HALFSIZE = 9
 INVALID_RANGE = 9
 sample_count = 0
 
-
 def _read32(bytestream):
     dt = numpy.dtype(numpy.uint32).newbyteorder('>')
     return numpy.frombuffer(bytestream.read(4), dtype=dt)[0]
@@ -37,7 +36,6 @@ def extract_data(image, x, y):
         bottom = shape[0]
 
     sub = image[top:bottom, left:right]
-    sub *= 255
     return sub.flatten()
 
 
@@ -48,8 +46,6 @@ def save_data_single(image, x, y, type_id=0):
         print("ERRORE")
     writer.write(img_data)
     label_writer.write(numpy.array(type_id, dtype=numpy.uint8))
-    misc.imsave("tmp/img_"+ str(x)+"-"+str(y)+".img")
-
     sample_count += 1
 
 
@@ -72,9 +68,7 @@ def save_data(image, x, y, type_id=0, samples=11):
 
 
 def manage_image(single_type, image, type_id, sammpes=11):
-    image_count = 1
     for point in single_type:
-        image_count += 1
         x = int(single_type[point]['x'])
         y = int(single_type[point]['y'])
         save_data(image, x, y, type_id, sammpes)

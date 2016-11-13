@@ -2,11 +2,12 @@ import argparse
 import os.path
 import time
 from datetime import datetime
+from scipy import  misc
 
 import numpy as np
 import tensorflow as tf
 
-from BachData  import BachData
+from BachData import BachData
 
 INPUT_FILE = "samples.img"
 CHECKPOINT_FILENAME = "point.ckpt"
@@ -14,19 +15,12 @@ TRAIN_DIR = "./tensordboard_data"
 CHECKPOINT_DIR = "./PointData"
 IMAGE_WIDTH = 18
 IMAGE_HEIGHT = 18
-VALID_IMAGES = 0
 IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * 3
 NUM_CLASSES = 1
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 1
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
 BACH_VALID_SIZE = 300
-BACH_WRONG_SIZE = 300
+BACH_WRONG_SIZE = 600
 
 MOVING_AVERAGE_DECAY = 0.9999  # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 350.0  # Epochs after which learning rate decays.
-LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.5  # Initial learning rate.
-
 MAX_STEPS = 1000000
 
 
@@ -46,7 +40,6 @@ def extract_images():
         with open("samples.label", "rb") as label_reader:
             global IMAGE_HEIGHT
             global IMAGE_WIDTH
-            global VALID_IMAGES
             global NUM_CLASSES
             reader.seek(0, os.SEEK_END)
             size = reader.tell()
@@ -60,11 +53,12 @@ def extract_images():
             label_wrong = []
             for i in range(0, int(num_images)):
                 if label[i] > 0:
+                    misc.imsave("tmp/" + str(label[i]) + "-img_orig_" + str(i) + ".png", data[i])
                     if label[i] > NUM_CLASSES:
                         NUM_CLASSES = label[i]
                     label_valid = np.append(label_valid, i)
                 else:
-                    label_wrong = np.arange(i,num_images)
+                    label_wrong = np.arange(i + 1, num_images)
                     break
             NUM_CLASSES += 1
 
@@ -81,7 +75,7 @@ def add_weight_decay(variable, param):
 
 def inference(images):
     kernel1_size = 5
-    filter1_size = 10
+    filter1_size = 30
     level1 = 300
     with tf.variable_scope('conv1') as scope:
         kernelWeights = tf.Variable(name='weights',
@@ -93,8 +87,6 @@ def inference(images):
         biases = tf.Variable(name='biases', initial_value=tf.zeros([filter1_size]), dtype=tf.float32)
         bias = tf.nn.bias_add(conv, biases)
         conv1 = tf.nn.relu(bias, name=scope.name)
-        #       tf.histogram_summary('/activations/conv1', conv1)
-        #       tf.scalar_summary('/sparsity/conv1', tf.nn.zero_fraction(conv1))
 
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
     norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
@@ -107,8 +99,6 @@ def inference(images):
         add_weight_decay(weights, 0.04)
         biases = tf.Variable(name='biases', initial_value=tf.constant(value=0.1, shape=[level1], dtype=tf.float32))
         local1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
-        #      tf.histogram_summary('/activations/local1', local1)
-        #      tf.scalar_summary('/sparsity/local1', tf.nn.zero_fraction(local1))
 
     with tf.variable_scope('softmax_linear') as scope:
         weights = tf.Variable(name='weights',
@@ -118,8 +108,6 @@ def inference(images):
         biases = tf.Variable(name='biases', initial_value=tf.constant(value=0, shape=[NUM_CLASSES], dtype=tf.float32))
         mat_mul = tf.matmul(local1, weights)
         softmax_linear = tf.add(mat_mul, biases, name=scope.name)
-        #      tf.histogram_summary('/activations/softmax_linear', softmax_linear)
-        #      tf.scalar_summary('/sparsity/softmax_linear', tf.nn.zero_fraction(softmax_linear))
 
     return softmax_linear, conv1
 
@@ -140,48 +128,21 @@ def _add_loss_summaries(total_loss):
     loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
     losses = tf.get_collection('losses')
     loss_averages_op = loss_averages.apply(losses + [total_loss])
-
-    # Attach a scalar summary to all individual losses and the total loss; do the
-    # same for the averaged version of the losses.
-    #   for l in losses + [total_loss]:
-    # Name each loss as '(raw)' and name the moving average version of the loss
-    # as the original loss name.
-    #      tf.scalar_summary(l.op.name + ' (raw)', l)
-    #      tf.scalar_summary(l.op.name, loss_averages.average(l))
-
     return loss_averages_op
 
 
 def _train(total_loss, global_step):
-    # lr = tf.train.exponential_decay(INITIAL_LEARNING_RATE,
-    #                                 global_step,
-    #                                 1000,
-    #                                 LEARNING_RATE_DECAY_FACTOR,
-    #                                 staircase=True)
-    lr = 0.5
-
     tf.train.GradientDescentOptimizer(0.1).minimize(total_loss)
 
     loss_averages_op = _add_loss_summaries(total_loss)
 
     with tf.control_dependencies([loss_averages_op]):
         # opt = tf.train.GradientDescentOptimizer(lr)
-        opt = tf.train.AdadeltaOptimizer(lr)
+        opt = tf.train.AdadeltaOptimizer()
         # opt = tf.train.AdagradOptimizer(lr)
         grads = opt.compute_gradients(total_loss)
 
     apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-    #
-    # # Add histograms for trainable variables.
-    #  for var in tf.trainable_variables():
-    #     tf.histogram_summary(var.op.name, var)
-
-    # Add histograms for gradients.
-    # for grad, var in grads:
-    #    if grad is not None:
-    #       tf.histogram_summary(var.op.name + '/gradients', grad)
-
-    # Track the moving averages of all trainable variables.
     variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
@@ -207,19 +168,15 @@ def train():
 
         saver = tf.train.Saver(tf.all_variables())
 
-        # Build the summary operation based on the TF collection of Summaries.
-        #  summary_op = tf.merge_all_summaries()
-
         sess = tf.Session()
+        start = 0
         if FLAGS.START:
             init = tf.initialize_all_variables()
-            # Start running operations on the Graph.
             sess.run(init)
         else:
             saver.restore(sess, checkpoint_path)
             print("Model restored.")
-
-            # Start the queue runners.
+            start = global_step.eval(sess)
 
         tf.train.start_queue_runners(sess=sess)
 
@@ -229,17 +186,15 @@ def train():
         data = np.append(data, data_wrong, 0)
         label_spar = np.append(label_spar, labels_wrong_sparse, 0)
         labels = np.append(labels, labels_wrong)
-        for step in range(0, MAX_STEPS):
+        for step in range(start, MAX_STEPS):
             start_time = time.time()
-            _, loss_value, cross_entropy_value, logits_value = sess.run(fetches=[train_op, loss, cross_entropy, logits],
-                                                                        feed_dict={images: data,
-                                                                                   label_sparse: label_spar,
-                                                                                   y__: labels})
+            _, loss_value = sess.run(fetches=[train_op, loss],
+                                     feed_dict={images: data,
+                                                label_sparse: label_spar,
+                                                y__: labels})
             duration = time.time() - start_time
 
-            #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
-
-            if step % 200 == 1:
+            if step % 200 == 0:
                 data, label_spar, labels = bach_data.get_bach_data()
                 data_wrong, labels_wrong_sparse, labels_wrong = bach_wrong_data.get_bach_data()
                 data = np.append(data, data_wrong, 0)
@@ -248,17 +203,11 @@ def train():
                 labels = np.append(labels, labels_wrong)
                 num_examples_per_step = BACH_VALID_SIZE + BACH_WRONG_SIZE
                 examples_per_sec = num_examples_per_step / duration
-                logits_val, eval_func_value = sess.run((logits, eval_func),
-                                                       feed_dict={images: data, label_sparse: label_spar,
-                                                                  y__: labels})
-                #        summary_writer.add_summary(summary_str, step - 40)
+                eval_func_value = sess.run((eval_func),
+                                           feed_dict={images: data, label_sparse: label_spar,
+                                                      y__: labels})
                 format_str = '%s: step %d, loss = %.5f, eval= %d, (%.1f examples/sec)'
-                print(format_str % (datetime.now(), step, loss_value, eval_func_value,examples_per_sec))
-                format_str = 'Evaluation: %d (%d)'
-                calc = np.argmax(logits_val, 1)
-                val = logits_val.shape[0] - np.count_nonzero(calc == labels)
-                print(format_str % (val, eval_func_value))
-
+                print(format_str % (datetime.now(), step, loss_value, eval_func_value, examples_per_sec))
 
             # Save the model checkpoint periodically.
             if step % 200 == 199 or (step + 1) == MAX_STEPS:

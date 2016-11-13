@@ -28,7 +28,7 @@ def create_image_set(image, row,step):
 
 def inference(images):
     kernel1_size = 5
-    filter1_size = 10
+    filter1_size = 30
     level1 = 300
     with tf.variable_scope('conv1') as scope:
         kernel = tf.Variable(name='weights',
