@@ -17,7 +17,7 @@ def _read32(bytestream):
 
 
 def _write32(bytestream, value):
-    us32bit = struct.pack("I", value)
+    us32bit = struct.pack\("I", value)
     bytestream.write(us32bit)
 
 

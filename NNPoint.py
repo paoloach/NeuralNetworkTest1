@@ -1,10 +1,12 @@
+import argparse
 import os.path
 import time
 from datetime import datetime
-import argparse
 
 import numpy as np
 import tensorflow as tf
+
+from BachData  import BachData
 
 INPUT_FILE = "samples.img"
 CHECKPOINT_FILENAME = "point.ckpt"
@@ -17,60 +19,16 @@ IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT * 3
 NUM_CLASSES = 1
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 1
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
+BACH_VALID_SIZE = 300
+BACH_WRONG_SIZE = 300
 
 MOVING_AVERAGE_DECAY = 0.9999  # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0  # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
 INITIAL_LEARNING_RATE = 0.5  # Initial learning rate.
 
-MAX_STEPS = 100000
+MAX_STEPS = 1000000
 
-num_images = 0
-
-
-class BachData:
-    def __init__(self, data, all_label, label_index, num_classes,bach_size=200):
-        self.num_classes = num_classes
-        self.bach_size=bach_size
-        self.data = data
-        self.all_label = all_label
-        self.label_index = label_index
-        self.currentIndex = 0
-
-    def get_num_classes(self):
-        return self.num_classes
-
-    def get_bach_data(self):
-        data = []
-        labels= []
-        upper = self.currentIndex + self.bach_size
-        remain = 0
-        if upper > self.label_index.shape[0]:
-            remain = upper-self.label_index.shape[0]
-            upper = self.label_index.shape[0]
-
-        for index in self.label_index[self.currentIndex:upper]:
-            sparse_label = np.zeros( [self.num_classes])
-            sparse_label[self.all_label[index]]=1
-            if len(data)==0:
-                data = np.array([self.data[index]])
-                labels = np.array([sparse_label])
-            else:
-                data = np.append(data, [self.data[index]], 0)
-                labels = np.append(labels, [sparse_label],0)
-        self.currentIndex = upper
-        if remain > 0:
-            for index in self.currentIndex[0:remain]:
-                sparse_label = np.zeros([self.num_classes])
-                sparse_label[self.all_label[index]] = 1
-                if len(data) == 0:
-                    data = np.array([self.data[index]])
-                    labels = np.array([sparse_label])
-                else:
-                    data = np.append(data, [self.data[index]], 0)
-                    labels = np.append(labels, [sparse_label], 0)
-            self.currentIndex=remain
-        return data,labels
 
 def evaluation(logits, labels):
     int_label = tf.cast(labels, tf.int32)
@@ -90,7 +48,6 @@ def extract_images():
             global IMAGE_WIDTH
             global VALID_IMAGES
             global NUM_CLASSES
-            global num_images
             reader.seek(0, os.SEEK_END)
             size = reader.tell()
             reader.seek(0, os.SEEK_SET)
@@ -107,17 +64,14 @@ def extract_images():
                         NUM_CLASSES = label[i]
                     label_valid = np.append(label_valid, i)
                 else:
-                    label_wrong = np.append(label_wrong, i)
+                    label_wrong = np.zeros(num_images - i)
+                    break
             NUM_CLASSES += 1
 
-    bachData = BachData(data,label, label_valid,NUM_CLASSES)
-    bachWrongData = BachData(data, label, label_wrong,NUM_CLASSES)
+    bachData = BachData(data, label, label_valid, NUM_CLASSES, BACH_VALID_SIZE)
+    bachWrongData = BachData(data, label, label_wrong, NUM_CLASSES, BACH_WRONG_SIZE)
 
     return bachData, bachWrongData
-
-# def _activation_summary(x):
-#    tf.histogram_summary('/activations', x)
-#    tf.scalar_summary('/sparsity', tf.nn.zero_fraction(x))
 
 
 def add_weight_decay(variable, param):
@@ -238,21 +192,17 @@ def _train(total_loss, global_step):
 
 
 def train():
-    global num_images
-    data, label, label_valid = extract_images()
-    label_sparse = np.zeros([label_valid.shape[0] + 1, NUM_CLASSES])
-    for i in range(0, label_valid.shape[0]):
-        label_sparse[i, label[label_valid[i]]] = 1
+    bach_data, bach_wrong_data = extract_images()
     checkpoint_path = os.path.join(CHECKPOINT_DIR, CHECKPOINT_FILENAME)
     with tf.Graph().as_default():
-
         global_step = tf.Variable(0, trainable=False)
-        images = tf.placeholder(np.float32, [num_images, IMAGE_WIDTH, IMAGE_HEIGHT, 3], name="images")
-        labels = tf.placeholder(np.float32, [None, NUM_CLASSES], name="labels")
-        y__ = tf.placeholder(tf.float32, [int(num_images)], name="y__")
+        images = tf.placeholder(np.float32, [BACH_VALID_SIZE + BACH_WRONG_SIZE, IMAGE_WIDTH, IMAGE_HEIGHT, 3],
+                                name="images")
+        label_sparse = tf.placeholder(np.float32, [None, NUM_CLASSES], name="labels")
+        y__ = tf.placeholder(tf.float32, [int(BACH_VALID_SIZE + BACH_WRONG_SIZE)], name="y__")
         logits, conv = inference(images)
         eval_func = evaluation(logits, y__)
-        loss, cross_entropy = calculate_loss(logits, labels)
+        loss, cross_entropy = calculate_loss(logits, label_sparse)
         train_op = _train(loss, global_step)
 
         saver = tf.train.Saver(tf.all_variables())
@@ -269,40 +219,42 @@ def train():
             saver.restore(sess, checkpoint_path)
             print("Model restored.")
 
-        # Start the queue runners.
+            # Start the queue runners.
 
         tf.train.start_queue_runners(sess=sess)
 
         # summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
-
+        data, label_spar, labels = bach_data.get_bach_data()
+        data_wrong, labels_wrong_sparse, labels_wrong = bach_wrong_data.get_bach_data()
+        data = np.append(data, data_wrong, 0)
+        label_spar = np.append(label_spar, labels_wrong_sparse, 0)
+        labels = np.append(labels, labels_wrong)
         for step in range(0, MAX_STEPS):
             start_time = time.time()
-
             _, loss_value, cross_entropy_value, logits_value = sess.run(fetches=[train_op, loss, cross_entropy, logits],
-                                                                        feed_dict={images: data, labels: label_sparse,
-                                                                                   y__: label})
+                                                                        feed_dict={images: data,
+                                                                                   label_sparse: label_spar,
+                                                                                   y__: labels})
             duration = time.time() - start_time
 
             #            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
             if step % 200 == 1:
-                num_examples_per_step = num_images
+                data, label_spar, labels = bach_data.get_bach_data()
+                data_wrong, labels_wrong_sparse, labels_wrong = bach_wrong_data.get_bach_data()
+                data = np.append(data, data_wrong, 0)
+
+                label_spar = np.append(label_spar, labels_wrong_sparse, 0)
+                labels = np.append(labels, labels_wrong)
+                num_examples_per_step = BACH_VALID_SIZE + BACH_WRONG_SIZE
                 examples_per_sec = num_examples_per_step / duration
                 logits_val, eval_func_value = sess.run((logits, eval_func),
-                                                       feed_dict={images: data, labels: label_sparse,
-                                                                  y__: label})
+                                                       feed_dict={images: data, label_sparse: label_spar,
+                                                                  y__: labels})
                 #        summary_writer.add_summary(summary_str, step - 40)
-                format_str = '%s: step %d, loss = %.5f, (%.1f examples/sec)'
-                print(format_str % (datetime.now(), step, loss_value, examples_per_sec))
-                format_str = 'Evaluation: %d (%d)'
-                calc = np.argmax(logits_value, 1)
-                amax = np.amax(logits_value, 1)
-                val = num_images - np.count_nonzero(calc == label)
-                print(format_str % (val, eval_func_value))
-            # if step % 200 == 0:
-            #     conv_val = sess.run(conv, feed_dict={images: data, labels: label_sparse, y__: label})
-            #     conv_val = conv_val.swapaxes(1, 3)
-            #     saveImageConv(data, conv_val, label);
+                format_str = '%s: step %d, loss = %.5f, eval= %d, (%.1f examples/sec)'
+                print(format_str % (datetime.now(), step, loss_value, eval_func_value,examples_per_sec))
+
 
             # Save the model checkpoint periodically.
             if step % 200 == 199 or (step + 1) == MAX_STEPS:
