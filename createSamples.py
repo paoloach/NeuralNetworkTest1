@@ -6,8 +6,8 @@ from scipy import misc, random
 
 typesDict = dict()
 typeCount = 0
-HALFSIZE = 9
-INVALID_RANGE = 9
+HALFSIZE = 8
+INVALID_RANGE = 8
 sample_count = 0
 
 def _read32(bytestream):
