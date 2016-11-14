@@ -106,13 +106,15 @@ def search():
 
             if len(found_positive[0]) > 0:
                 for i in np.nditer(found_positive):
-                    listGroup.add(y, i+left, label_val[i])
-                    str_logistic = "{"
-                    for li in range(NUM_CLASSES):
-                        str_logistic += str(logits_value[i][li]) + ", "
-                    str_logistic += "}"
-                    print("(%d,%d) found label %d with strengths  %s" % (y, i + left, label_val[i], str_logistic))
-        print("found %d points" % listGroup.size())
+                    listGroup.add(y, i+left, label_val[i],logits_value[i][label_val[i]])
+                    #str_logistic = "{"
+                    #for li in range(NUM_CLASSES):
+                    #    str_logistic += str(logits_value[i][li]) + ", "
+                    #str_logistic += "}"
+                    #print("(%d,%d) found label %d with strengths  %s" % (y, i + left, label_val[i], str_logistic))
+        for i in range(listGroup.size()):
+            print (listGroup.get(i))
+
 
 
 # noinspection PyUnusedLocal
