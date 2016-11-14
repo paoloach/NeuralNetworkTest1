@@ -2,6 +2,8 @@ import argparse
 import os.path
 import time
 from datetime import datetime
+from PointGroup import PointGroup
+from PointGroup import ListGroup
 
 import numpy as np
 from scipy import misc
@@ -94,18 +96,23 @@ def search():
         checkpoint_path = os.path.join(CHECKPOINT_DIR, CHECKPOINT_FILENAME)
         saver.restore(sess, checkpoint_path)
 
+        listGroup = ListGroup()
+
         for y in range(top, bottom - IMAGE_HEIGHT, step):
             images_set = create_image_set(image, y,step)
             reduced_val, label_val, found_val, logits_value = sess.run(fetches=[reduced, label, found, logits],
                                                                        feed_dict={images: images_set})
             found_positive = np.nonzero(label_val)
+
             if len(found_positive[0]) > 0:
                 for i in np.nditer(found_positive):
+                    listGroup.add(y, i+left, label_val[i])
                     str_logistic = "{"
                     for li in range(NUM_CLASSES):
                         str_logistic += str(logits_value[i][li]) + ", "
                     str_logistic += "}"
                     print("(%d,%d) found label %d with strengths  %s" % (y, i + left, label_val[i], str_logistic))
+        print("found %d points" % listGroup.size())
 
 
 # noinspection PyUnusedLocal
